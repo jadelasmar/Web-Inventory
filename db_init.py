@@ -19,15 +19,23 @@ def init_db():
     if hasattr(st, 'secrets') and 'postgres' in st.secrets:
         import psycopg2
         
-        # Connect to PostgreSQL
-        conn = psycopg2.connect(
-            host=st.secrets["postgres"]["host"],
-            port=st.secrets["postgres"]["port"],
-            database=st.secrets["postgres"]["database"],
-            user=st.secrets["postgres"]["user"],
-            password=st.secrets["postgres"]["password"]
-        )
-        conn.autocommit = False
+        try:
+            # Connect to PostgreSQL
+            conn = psycopg2.connect(
+                host=st.secrets["postgres"]["host"],
+                port=int(st.secrets["postgres"]["port"]),
+                database=st.secrets["postgres"]["database"],
+                user=st.secrets["postgres"]["user"],
+                password=st.secrets["postgres"]["password"],
+                connect_timeout=10
+            )
+            conn.autocommit = False
+            st.success("✅ Connected to PostgreSQL database")
+        except Exception as e:
+            st.error(f"⚠️ PostgreSQL connection failed: {str(e)}")
+            st.warning("📝 Check: 1) Supabase project is ACTIVE (not paused), 2) Secrets are correct, 3) Database allows connections")
+            st.info("Using SQLite as fallback...")
+            conn = sqlite3.connect("bimpos_inventory.db", check_same_thread=False)
     else:
         # Fallback to SQLite for local development
         conn = sqlite3.connect("bimpos_inventory.db", check_same_thread=False)
