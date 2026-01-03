@@ -6,6 +6,9 @@ from services import backup_database
 
 def render_sidebar_menu():
     """Render the sidebar navigation menu with admin login/logout."""
+    # Debug: Show configured password length (for troubleshooting)
+    st.sidebar.caption(f"Debug: Password length = {len(ADMIN_PASSWORD)}")
+    
     menu = ["📊 Dashboard", "📋 View Inventory", "⚠️ Stock Alerts", "🔄 Movement Log"]
     if st.session_state.admin_mode:
         # Only show admin pages if admin_mode is enabled
