@@ -44,10 +44,10 @@ try:
     import streamlit as st
     ADMIN_PASSWORD: str = st.secrets.get("ADMIN_PASSWORD", os.getenv(
         "ADMIN_PASSWORD",
-        "CHANGE_ME_RANDOM_" + "x7k9mP2nQ8vL5wR3tY6jN1bH4cF0sD9e",
+        "CHANGE_ME_RANDOM_",
     ))
 except:
     ADMIN_PASSWORD: str = os.getenv(
         "ADMIN_PASSWORD",
-        "CHANGE_ME_RANDOM_" + "x7k9mP2nQ8vL5wR3tY6jN1bH4cF0sD9e",
+        "CHANGE_ME_RANDOM_",
     )
