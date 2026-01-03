@@ -1,6 +1,6 @@
 [theme]
-# Use device theme (auto light/dark mode)
-base = "light"
+# Use dark theme by default
+base = "dark"
 
 [server]
 headless = true
