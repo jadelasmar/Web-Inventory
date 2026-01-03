@@ -20,15 +20,17 @@ def init_db():
         import psycopg2
         
         try:
-            # Connect to PostgreSQL
-            conn = psycopg2.connect(
-                host=st.secrets["postgres"]["host"],
-                port=int(st.secrets["postgres"]["port"]),
-                database=st.secrets["postgres"]["database"],
-                user=st.secrets["postgres"]["user"],
-                password=st.secrets["postgres"]["password"],
-                connect_timeout=10
+            # Connect to PostgreSQL (Supabase requires SSL)
+            # Use connection string format to avoid IPv6 issues
+            connection_string = (
+                f"postgresql://{st.secrets['postgres']['user']}:"
+                f"{st.secrets['postgres']['password']}@"
+                f"{st.secrets['postgres']['host']}:"
+                f"{st.secrets['postgres']['port']}/"
+                f"{st.secrets['postgres']['database']}"
+                f"?sslmode=require"
             )
+            conn = psycopg2.connect(connection_string, connect_timeout=10)
             conn.autocommit = False
             st.success("✅ Connected to PostgreSQL database")
         except Exception as e:

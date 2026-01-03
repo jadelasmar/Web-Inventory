@@ -23,8 +23,12 @@ if "menu_selection" not in st.session_state:
 if "input_values" not in st.session_state:
     st.session_state.input_values = {}
 
-# Initialize database connection
-conn = init_db()
+# Initialize database connection (cached to avoid reconnecting on every interaction)
+@st.cache_resource
+def get_db_connection():
+    return init_db()
+
+conn = get_db_connection()
 
 # Render sidebar menu and backup button
 menu = render_sidebar_menu()
