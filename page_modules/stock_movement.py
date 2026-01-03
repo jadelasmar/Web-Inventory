@@ -1,8 +1,12 @@
 """Stock movement recording page."""
 import streamlit as st
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from constants import MOVEMENT_TYPES
 from services import get_products, record_movement
+
+# Lebanon timezone
+LEBANON_TZ = ZoneInfo("Asia/Beirut")
 
 
 def render(conn):
@@ -116,7 +120,7 @@ def render(conn):
     else:
         date = st.date_input(
             "Date",
-            value=datetime.now().date(),
+            value=datetime.now(LEBANON_TZ).date(),
             key=date_key,
         )
 

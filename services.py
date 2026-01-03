@@ -8,8 +8,12 @@ import shutil
 import sqlite3
 from datetime import datetime
 from typing import Iterable, Optional, Union
+from zoneinfo import ZoneInfo
 
 import pandas as pd
+
+# Lebanon timezone
+LEBANON_TZ = ZoneInfo("Asia/Beirut")
 
 try:
     import psycopg2
@@ -331,7 +335,7 @@ def backup_database(
     """Create a dated copy of the DB in the backups directory."""
     try:
         os.makedirs(backups_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(LEBANON_TZ).strftime("%Y%m%d_%H%M%S")
         backup_file = os.path.join(
             backups_dir,
             f"bimpos_backup_{timestamp}.db",
