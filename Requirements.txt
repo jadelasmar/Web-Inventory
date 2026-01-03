@@ -6,6 +6,7 @@ streamlit-extras
 pytest
 python-dotenv
 playwright
+psycopg2-binary
 # Developer-only (optional):
 # black
 # flake8

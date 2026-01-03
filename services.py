@@ -7,111 +7,174 @@ import os
 import shutil
 import sqlite3
 from datetime import datetime
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 
 import pandas as pd
 
+try:
+    import psycopg2
+    import psycopg2.extensions
+except ImportError:
+    psycopg2 = None
+
 logger = logging.getLogger(__name__)
 
+# Type alias for database connections
+DBConnection = Union[sqlite3.Connection, 'psycopg2.extensions.connection']
 
-def init_db(conn: sqlite3.Connection) -> None:
+
+def is_postgres(conn: DBConnection) -> bool:
+    """Check if connection is PostgreSQL."""
+    return psycopg2 is not None and isinstance(conn, psycopg2.extensions.connection)
+
+
+def init_db(conn: DBConnection) -> None:
     """Create tables for a new database (safe to run on existing DB)."""
-    with conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                category TEXT,
-                description TEXT,
-                image_url TEXT,
-                current_stock INTEGER DEFAULT 0,
-                cost_price REAL DEFAULT 0,
-                sale_price REAL DEFAULT 0,
-                supplier TEXT,
-                isactive INTEGER DEFAULT 1
-            )
-            """
+    is_pg = is_postgres(conn)
+    
+    # Use SERIAL for PostgreSQL, INTEGER PRIMARY KEY AUTOINCREMENT for SQLite
+    id_type = "SERIAL PRIMARY KEY" if is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    # Use NUMERIC for PostgreSQL, REAL for SQLite
+    real_type = "NUMERIC(10,2)" if is_pg else "REAL"
+    
+    cur = conn.cursor()
+    
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS products (
+            id {id_type},
+            name TEXT UNIQUE NOT NULL,
+            category TEXT,
+            description TEXT,
+            image_url TEXT,
+            current_stock INTEGER DEFAULT 0,
+            cost_price {real_type} DEFAULT 0,
+            sale_price {real_type} DEFAULT 0,
+            supplier TEXT,
+            isactive INTEGER DEFAULT 1
         )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS movements (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                product_name TEXT NOT NULL,
-                product_category TEXT,
-                movement_type TEXT,
-                quantity INTEGER,
-                price REAL,
-                supplier_customer TEXT,
-                notes TEXT,
-                movement_date TEXT,
-                FOREIGN KEY(product_name) REFERENCES products(name)
-            )
-            """
+        """
+    )
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS movements (
+            id {id_type},
+            product_name TEXT NOT NULL,
+            product_category TEXT,
+            movement_type TEXT,
+            quantity INTEGER,
+            price {real_type},
+            supplier_customer TEXT,
+            notes TEXT,
+            movement_date TEXT
         )
-        # Schema migrations for older databases: ensure `isactive` exists
-        cur = conn.cursor()
+        """
+    )
+    
+    # Add foreign key for PostgreSQL (SQLite doesn't enforce it by default)
+    if is_pg:
         try:
-            cur.execute("PRAGMA table_info(products)")
-            cols = [r[1] for r in cur.fetchall()]
-            if "isactive" not in cols:
-                # Add isactive column with default 1 (active)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints 
+                        WHERE constraint_name = 'fk_movements_product_name'
+                    ) THEN
+                        ALTER TABLE movements 
+                        ADD CONSTRAINT fk_movements_product_name 
+                        FOREIGN KEY(product_name) REFERENCES products(name);
+                    END IF;
+                END $$;
+            """)
+        except Exception:
+            pass
+    
+    # Schema migrations: ensure `isactive` exists
+    try:
+        if is_pg:
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='products' AND column_name='isactive'
+            """)
+            if not cur.fetchone():
                 cur.execute(
                     "ALTER TABLE products ADD COLUMN isactive INTEGER DEFAULT 1"
                 )
-        except Exception:
-            # Non-fatal: log via logger when available; keep compatibility
-            pass
+        else:
+            cur.execute("PRAGMA table_info(products)")
+            cols = [r[1] for r in cur.fetchall()]
+            if "isactive" not in cols:
+                cur.execute(
+                    "ALTER TABLE products ADD COLUMN isactive INTEGER DEFAULT 1"
+                )
+    except Exception:
+        pass
+    
+    conn.commit()
 
 
-def add_product(conn: sqlite3.Connection, data: tuple) -> None:
+def add_product(conn: DBConnection, data: tuple) -> None:
     """Insert a new product into the products table."""
-    import sqlite3
-
-    import sqlite3
-
     name = data[0]
     cur = conn.cursor()
-    cur.execute("SELECT name FROM products WHERE LOWER(name) = ?", (name.lower(),))
+    
+    # Use parameterized query appropriate for the database
+    placeholder = "%s" if is_postgres(conn) else "?"
+    cur.execute(
+        f"SELECT name FROM products WHERE LOWER(name) = {placeholder}",
+        (name.lower(),)
+    )
     if cur.fetchone():
-        raise sqlite3.IntegrityError("Duplicate product name (case-insensitive)")
-    with conn:
-        conn.execute(
-            (
-                "INSERT INTO products (name, category, description, "
-                "image_url, current_stock, "
-                "cost_price, sale_price, supplier) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-            ),
-            data,
-        )
+        error_class = psycopg2.IntegrityError if is_postgres(conn) else sqlite3.IntegrityError
+        raise error_class("Duplicate product name (case-insensitive)")
+    
+    placeholders = ", ".join([placeholder] * len(data))
+    cur.execute(
+        f"""
+        INSERT INTO products (name, category, description, 
+                            image_url, current_stock, 
+                            cost_price, sale_price, supplier) 
+        VALUES ({placeholders})
+        """,
+        data,
+    )
+    conn.commit()
 
 
-def update_product(conn: sqlite3.Connection, data: tuple) -> None:
+def update_product(conn: DBConnection, data: tuple) -> None:
     """Update product information (by name)."""
-    with conn:
-        conn.execute(
-            (
-                "UPDATE products SET category=?, description=?, image_url=?, "
-                "cost_price=?, sale_price=?, supplier=? WHERE name=?"
-            ),
-            data,
-        )
+    placeholder = "%s" if is_postgres(conn) else "?"
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        UPDATE products SET category={placeholder}, description={placeholder}, 
+                          image_url={placeholder}, cost_price={placeholder}, 
+                          sale_price={placeholder}, supplier={placeholder} 
+        WHERE name={placeholder}
+        """,
+        data,
+    )
+    conn.commit()
 
 
-def delete_product(conn: sqlite3.Connection, name: str) -> None:
+def delete_product(conn: DBConnection, name: str) -> None:
     """Soft-delete a product by marking it inactive (isactive=0)."""
-    with conn:
-        conn.execute("UPDATE products SET isactive=0 WHERE name=?", (name,))
+    placeholder = "%s" if is_postgres(conn) else "?"
+    cur = conn.cursor()
+    cur.execute(f"UPDATE products SET isactive=0 WHERE name={placeholder}", (name,))
+    conn.commit()
 
 
-def restore_product(conn: sqlite3.Connection, name: str) -> None:
+def restore_product(conn: DBConnection, name: str) -> None:
     """Restore a previously soft-deleted product (isactive=1)."""
-    with conn:
-        conn.execute("UPDATE products SET isactive=1 WHERE name=?", (name,))
+    placeholder = "%s" if is_postgres(conn) else "?"
+    cur = conn.cursor()
+    cur.execute(f"UPDATE products SET isactive=1 WHERE name={placeholder}", (name,))
+    conn.commit()
 
 
-def record_movement(conn: sqlite3.Connection, data: tuple) -> None:
+def record_movement(conn: DBConnection, data: tuple) -> None:
     """Record a stock movement and update the product's current stock.
 
     data = (
@@ -141,10 +204,11 @@ def record_movement(conn: sqlite3.Connection, data: tuple) -> None:
     if hasattr(movement_date, "isoformat"):
         movement_date = movement_date.isoformat()
 
+    placeholder = "%s" if is_postgres(conn) else "?"
     cur = conn.cursor()
     # read current stock and active flag
     cur.execute(
-        "SELECT current_stock, COALESCE(isactive,1) FROM products WHERE name= ?",
+        f"SELECT current_stock, COALESCE(isactive,1) FROM products WHERE name={placeholder}",
         (product_name,),
     )
     row = cur.fetchone()
@@ -169,33 +233,36 @@ def record_movement(conn: sqlite3.Connection, data: tuple) -> None:
 
     # If price is 'N/A', store as None (NULL in DB)
     price_db = None if price in (None, "", "N/A") else float(price)
-    with conn:
-        conn.execute(
-            "UPDATE products SET current_stock=? WHERE name=?",
-            (new_stock, product_name),
-        )
-        conn.execute(
-            (
-                "INSERT INTO movements (product_name, product_category, "
-                "movement_type, quantity, price, supplier_customer, "
-                "notes, movement_date) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-            ),
-            (
-                product_name,
-                data[1],
-                movement_type,
-                int(quantity),
-                price_db,
-                supplier_customer,
-                notes,
-                movement_date,
-            ),
-        )
+    
+    cur.execute(
+        f"UPDATE products SET current_stock={placeholder} WHERE name={placeholder}",
+        (new_stock, product_name),
+    )
+    
+    placeholders_list = ", ".join([placeholder] * 8)
+    cur.execute(
+        f"""
+        INSERT INTO movements (product_name, product_category, 
+                             movement_type, quantity, price, supplier_customer, 
+                             notes, movement_date) 
+        VALUES ({placeholders_list})
+        """,
+        (
+            product_name,
+            data[1],
+            movement_type,
+            int(quantity),
+            price_db,
+            supplier_customer,
+            notes,
+            movement_date,
+        ),
+    )
+    conn.commit()
 
 
 def get_products(
-    conn: sqlite3.Connection, include_inactive: bool = False
+    conn: DBConnection, include_inactive: bool = False
 ) -> pd.DataFrame:
     """Return products as a pandas DataFrame. By default excludes inactive products.
 
@@ -211,8 +278,15 @@ def get_products(
         # Prefer to filter by `isactive` when present; detect column existence
         cur = conn.cursor()
         try:
-            cur.execute("PRAGMA table_info(products)")
-            cols = [r[1] for r in cur.fetchall()]
+            if is_postgres(conn):
+                cur.execute("""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_name='products' AND column_name='isactive'
+                """)
+                cols = [r[0] for r in cur.fetchall()]
+            else:
+                cur.execute("PRAGMA table_info(products)")
+                cols = [r[1] for r in cur.fetchall()]
         except Exception:
             cols = []
 
@@ -229,14 +303,17 @@ def get_products(
 
 
 def get_movements(
-    conn: sqlite3.Connection,
+    conn: DBConnection,
     days: Optional[int] = None,
     types: Optional[Iterable[str]] = None,
 ) -> pd.DataFrame:
     """Return movements filtered by days and types."""
     query = "SELECT * FROM movements WHERE 1=1"
     if days:
-        query += " AND movement_date >= " f"date('now','-{int(days)} days')"
+        if is_postgres(conn):
+            query += f" AND movement_date >= CURRENT_DATE - INTERVAL '{int(days)} days'"
+        else:
+            query += f" AND movement_date >= date('now','-{int(days)} days')"
     if types:
         type_str = ",".join(f"'{t}'" for t in types)
         query += " AND movement_type IN (" + type_str + ")"

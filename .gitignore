@@ -7,12 +7,16 @@ __pycache__/
 # VS Code settings
 .vscode/
 
-# Secrets
+# Secrets - IMPORTANT: Never commit these!
 .env
+.streamlit/secrets.toml
 
-# SQLite temp files
+# SQLite databases and temp files
+*.db
 *.db-journal
 *.db-wal
+bimpos_inventory.db
+backups/
 
 # Testing
 .pytest_cache/
@@ -20,3 +24,6 @@ tests/
 
 # Windows
 Thumbs.db
+
+# macOS
+.DS_Store
