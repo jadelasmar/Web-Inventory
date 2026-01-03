@@ -36,9 +36,9 @@ POS_CATEGORIES: List[str] = [
 MOVEMENT_TYPES: List[str] = ["PURCHASE", "SALE", "ADJUSTMENT", "REPLACEMENT"]
 LOW_STOCK_THRESHOLD_DEFAULT: int = 5
 
-# Read admin password from environment for security. Keep the default
-# for backward compatibility but please set ADMIN_PASSWORD in production.
+# Read admin password from environment for security. 
+# Default is for LOCAL DEVELOPMENT ONLY. Set ADMIN_PASSWORD in Streamlit secrets.
 ADMIN_PASSWORD: str = os.getenv(
     "ADMIN_PASSWORD",
-    "6things",
+    "admin123",  # Only for local dev - change in production via environment variable
 )
