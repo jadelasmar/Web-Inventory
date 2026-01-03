@@ -39,7 +39,15 @@ LOW_STOCK_THRESHOLD_DEFAULT: int = 5
 # Read admin password from environment for security.
 # MUST be set via environment variable or Streamlit secrets - no default provided.
 # For local dev, set ADMIN_PASSWORD environment variable.
-ADMIN_PASSWORD: str = os.getenv(
-    "ADMIN_PASSWORD",
-    "CHANGE_ME_RANDOM_" + "x7k9mP2nQ8vL5wR3tY6jN1bH4cF0sD9e",  # Unguessable default
-)
+# For Streamlit Cloud, set in secrets as ADMIN_PASSWORD (top level, not nested)
+try:
+    import streamlit as st
+    ADMIN_PASSWORD: str = st.secrets.get("ADMIN_PASSWORD", os.getenv(
+        "ADMIN_PASSWORD",
+        "CHANGE_ME_RANDOM_" + "x7k9mP2nQ8vL5wR3tY6jN1bH4cF0sD9e",
+    ))
+except:
+    ADMIN_PASSWORD: str = os.getenv(
+        "ADMIN_PASSWORD",
+        "CHANGE_ME_RANDOM_" + "x7k9mP2nQ8vL5wR3tY6jN1bH4cF0sD9e",
+    )
