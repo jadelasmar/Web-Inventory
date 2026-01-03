@@ -1,0 +1,11 @@
+streamlit
+pandas
+plotly
+streamlit-authenticator
+streamlit-extras
+pytest
+python-dotenv
+playwright
+# Developer-only (optional):
+# black
+# flake8

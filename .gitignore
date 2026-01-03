@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+
+# Virtual environment
+.venv/
+
+# VS Code settings
+.vscode/
+
+# Secrets
+.env
+
+# SQLite temp files
+*.db-journal
+*.db-wal
+
+# Testing
+.pytest_cache/
+tests/
+
+# Windows
+Thumbs.db
