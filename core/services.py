@@ -349,7 +349,7 @@ def get_movements(
 
 
 def backup_database(
-    src: str = "bimpos_inventory.db",
+    src: str = "data/bimpos_inventory.db",
     backups_dir: str = "backups",
 ) -> str:
     """Create a dated copy of the DB in the backups directory."""
