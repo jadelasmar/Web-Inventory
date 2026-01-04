@@ -14,11 +14,13 @@ from core.services import init_db as init_schema
 def init_db():
     """Initialize database connection. 
     Uses PostgreSQL in production (Streamlit Cloud) or SQLite locally.
+    Connection pooling is handled by caching in app.py.
     """
     # Check if running on Streamlit Cloud with PostgreSQL credentials
     try:
         if hasattr(st, 'secrets') and 'postgres' in st.secrets:
             import psycopg2
+            from psycopg2 import pool
             
             try:
                 # Connect to PostgreSQL (Supabase requires SSL)
@@ -30,7 +32,9 @@ def init_db():
                     user=st.secrets["postgres"]["user"],
                     password=st.secrets["postgres"]["password"],
                     sslmode='require',
-                    connect_timeout=10
+                    connect_timeout=10,
+                    # Performance optimizations for cloud deployment
+                    options='-c statement_timeout=30000'  # 30 second query timeout
                 )
                 conn.autocommit = False
                 st.success("✅ Connected to PostgreSQL database")
@@ -38,13 +42,13 @@ def init_db():
                 st.error(f"⚠️ PostgreSQL connection failed: {str(e)}")
                 st.warning("📝 Check: 1) Supabase project is ACTIVE (not paused), 2) Secrets are correct, 3) Database allows connections")
                 st.info("Using SQLite as fallback...")
-                conn = sqlite3.connect("bimpos_inventory.db", check_same_thread=False)
+                conn = sqlite3.connect("data/bimpos_inventory.db", check_same_thread=False)
         else:
             # Fallback to SQLite for local development
-            conn = sqlite3.connect("bimpos_inventory.db", check_same_thread=False)
+            conn = sqlite3.connect("data/bimpos_inventory.db", check_same_thread=False)
     except:
         # If secrets file doesn't exist or any other error, use SQLite
-        conn = sqlite3.connect("bimpos_inventory.db", check_same_thread=False)
+        conn = sqlite3.connect("data/bimpos_inventory.db", check_same_thread=False)
     
     # Delegate schema creation to services.init_db
     init_schema(conn)

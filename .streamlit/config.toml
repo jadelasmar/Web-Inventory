@@ -6,3 +6,17 @@ base = "dark"
 headless = true
 enableCORS = false
 port = 8501
+# Performance: Limit file watcher to reduce resource usage on cloud
+fileWatcherType = "none"
+# Performance: Reduce max message size if not needed
+maxMessageSize = 200
+
+[browser]
+# Disable server stats collection for better performance
+gatherUsageStats = false
+
+[runner]
+# Performance: Faster script execution
+fastReruns = true
+# Automatically rerun on file changes (local dev only)
+magicEnabled = true

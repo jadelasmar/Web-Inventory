@@ -11,6 +11,7 @@ from typing import Iterable, Optional, Union
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import streamlit as st
 
 # Lebanon timezone
 LEBANON_TZ = ZoneInfo("Asia/Beirut")
@@ -273,37 +274,46 @@ def get_products(
     This function is tolerant of older databases that may not have the
     `isactive` column: if the column is missing it falls back to returning
     all rows.
+    
+    Cached for 30 seconds to improve performance on Streamlit Cloud.
     """
-    try:
-        if include_inactive:
-            query = "SELECT * FROM products"
-            return pd.read_sql(query, conn)
-
-        # Prefer to filter by `isactive` when present; detect column existence
-        cur = conn.cursor()
+    @st.cache_data(ttl=30)
+    def _fetch_products(cache_key: str, include_inactive: bool = False):
         try:
-            if is_postgres(conn):
-                cur.execute("""
-                    SELECT column_name FROM information_schema.columns 
-                    WHERE table_name='products' AND column_name='isactive'
-                """)
-                cols = [r[0] for r in cur.fetchall()]
+            if include_inactive:
+                query = "SELECT * FROM products"
+                return pd.read_sql(query, conn)
+
+            # Prefer to filter by `isactive` when present; detect column existence
+            cur = conn.cursor()
+            try:
+                if is_postgres(conn):
+                    cur.execute("""
+                        SELECT column_name FROM information_schema.columns 
+                        WHERE table_name='products' AND column_name='isactive'
+                    """)
+                    cols = [r[0] for r in cur.fetchall()]
+                else:
+                    cur.execute("PRAGMA table_info(products)")
+                    cols = [r[1] for r in cur.fetchall()]
+            except Exception:
+                cols = []
+
+            if "isactive" in cols:
+                query = "SELECT * FROM products WHERE isactive=1"
             else:
-                cur.execute("PRAGMA table_info(products)")
-                cols = [r[1] for r in cur.fetchall()]
-        except Exception:
-            cols = []
+                # Older DB without isactive — return all rows (can't filter)
+                query = "SELECT * FROM products"
 
-        if "isactive" in cols:
-            query = "SELECT * FROM products WHERE isactive=1"
-        else:
-            # Older DB without isactive — return all rows (can't filter)
-            query = "SELECT * FROM products"
-
-        return pd.read_sql(query, conn)
-    except Exception as e:  # pragma: no cover - defensive
-        logger.exception("Failed to read products: %s", e)
-        return pd.DataFrame()
+            return pd.read_sql(query, conn)
+        except Exception as e:
+            logger.error(f"Error fetching products: {e}")
+            return pd.DataFrame()
+    
+    # Use a cache key that changes when data might have changed
+    # This allows caching while still refreshing when needed
+    cache_key = f"products_{include_inactive}_{datetime.now().timestamp()}"
+    return _fetch_products(cache_key, include_inactive)
 
 
 def get_movements(
@@ -311,21 +321,31 @@ def get_movements(
     days: Optional[int] = None,
     types: Optional[Iterable[str]] = None,
 ) -> pd.DataFrame:
-    """Return movements filtered by days and types."""
-    query = "SELECT * FROM movements WHERE 1=1"
-    if days:
-        if is_postgres(conn):
-            query += f" AND movement_date >= CURRENT_DATE - INTERVAL '{int(days)} days'"
-        else:
-            query += f" AND movement_date >= date('now','-{int(days)} days')"
-    if types:
-        type_str = ",".join(f"'{t}'" for t in types)
-        query += " AND movement_type IN (" + type_str + ")"
-    try:
-        return pd.read_sql(query, conn)
-    except Exception as e:  # pragma: no cover - defensive
-        logger.exception("Failed to read movements: %s", e)
-        return pd.DataFrame()
+    """Return movements filtered by days and types.
+    
+    Cached for 10 seconds to improve performance.
+    """
+    @st.cache_data(ttl=10)
+    def _fetch_movements(cache_key: str, days: Optional[int] = None, types_tuple: Optional[tuple] = None):
+        query = "SELECT * FROM movements WHERE 1=1"
+        if days:
+            if is_postgres(conn):
+                query += f" AND movement_date >= CURRENT_DATE - INTERVAL '{int(days)} days'"
+            else:
+                query += f" AND movement_date >= date('now','-{int(days)} days')"
+        if types_tuple:
+            type_str = ",".join(f"'{t}'" for t in types_tuple)
+            query += " AND movement_type IN (" + type_str + ")"
+        try:
+            return pd.read_sql(query, conn)
+        except Exception as e:
+            logger.exception("Failed to read movements: %s", e)
+            return pd.DataFrame()
+    
+    # Convert types to tuple for hashability in cache
+    types_tuple = tuple(types) if types else None
+    cache_key = f"movements_{days}_{types_tuple}_{datetime.now().timestamp()}"
+    return _fetch_movements(cache_key, days, types_tuple)
 
 
 def backup_database(

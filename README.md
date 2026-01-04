@@ -48,7 +48,6 @@ Web-Inventory/
 
 ### 1. Set Up PostgreSQL Database (5 minutes)
 
-**Option A: Supabase (Recommended)**
 1. Go to https://supabase.com and sign in with GitHub
 2. Create new project: `bimpos-inventory`
 3. Set a strong password and save it
@@ -59,9 +58,6 @@ Web-Inventory/
    - Port: `5432`
    - Database: `postgres`
    - User: `postgres`
-
-**Option B: Neon (Alternative - 3GB free)**
-- Go to https://neon.tech and create a project
 
 ### 2. Deploy to Streamlit Cloud (3 minutes)
 
@@ -108,7 +104,7 @@ The app uses SQLite automatically for local development.
 
 ## 🗄️ Database
 
-- **Production**: PostgreSQL (Supabase/Neon) - Persistent, cloud storage
+- **Production**: PostgreSQL (Supabase) - Persistent, cloud storage
 - **Local Dev**: SQLite (default) - Automatic fallback, no setup
 
 ## 🔐 Admin Access
