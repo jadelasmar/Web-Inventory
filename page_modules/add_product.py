@@ -47,11 +47,35 @@ def render(conn):
             st.session_state["edit_desc"] = product["description"]
             st.session_state["edit_image"] = product["image_url"]
 
-        category = st.selectbox(
-            "Category",
-            sorted(POS_CATEGORIES, key=str.casefold),
-            key="edit_category",
+        # Category input with suggestions from existing products
+        existing_categories = (
+            sorted(set(df["category"].dropna().unique()), key=str.casefold)
+            if not df.empty and "category" in df.columns
+            else sorted(POS_CATEGORIES, key=str.casefold)
         )
+        category_input = st.text_input("Category", key="edit_category")
+        category_match = next(
+            (
+                c
+                for c in existing_categories
+                if c.lower() == (category_input or "").lower()
+            ),
+            None,
+        )
+        category_suggestions = [
+            c
+            for c in existing_categories
+            if category_input and category_input.lower() in c.lower()
+        ]
+        if category_input:
+            if category_match:
+                st.info(f"Using existing category: {category_match}")
+            else:
+                st.info("This will be a new category.")
+            if category_suggestions and not category_match:
+                st.write("Suggestions:")
+                st.write(", ".join(category_suggestions))
+        category = category_match if category_match else (category_input.title() if category_input else "")
         # Supplier deduplication for edit mode
         existing_suppliers = (
             sorted(set(df["supplier"].dropna().unique()), key=str.casefold)
@@ -120,11 +144,35 @@ def render(conn):
             del st.session_state["product_added_name"]
 
         name = st.text_input("Product Name *", key="add_name")
-        category = st.selectbox(
-            "Category",
-            sorted(POS_CATEGORIES, key=str.casefold),
-            key="edit_category",
+        # Category input with suggestions from existing products
+        existing_categories = (
+            sorted(set(df["category"].dropna().unique()), key=str.casefold)
+            if not df.empty and "category" in df.columns
+            else sorted(POS_CATEGORIES, key=str.casefold)
         )
+        category_input = st.text_input("Category", key="add_category")
+        category_match = next(
+            (
+                c
+                for c in existing_categories
+                if c.lower() == (category_input or "").lower()
+            ),
+            None,
+        )
+        category_suggestions = [
+            c
+            for c in existing_categories
+            if category_input and category_input.lower() in c.lower()
+        ]
+        if category_input:
+            if category_match:
+                st.info(f"Using existing category: {category_match}")
+            else:
+                st.info("This will be a new category.")
+            if category_suggestions and not category_match:
+                st.write("Suggestions:")
+                st.write(", ".join(category_suggestions))
+        category = category_match if category_match else (category_input.title() if category_input else "")
         # Streamlined supplier field: text input with live suggestions and deduplication
         existing_suppliers = (
             sorted(set(df["supplier"].dropna().unique()), key=str.casefold)
@@ -197,6 +245,7 @@ def render(conn):
                 # clear form values but keep category selection
                 for k in [
                     "add_name",
+                    "add_category",
                     "add_supplier",
                     "add_cost",
                     "add_sale",
