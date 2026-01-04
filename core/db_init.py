@@ -8,7 +8,7 @@ import sqlite3
 
 import streamlit as st
 
-from services import init_db as init_schema
+from core.services import init_db as init_schema
 
 
 def init_db():

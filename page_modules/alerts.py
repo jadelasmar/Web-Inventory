@@ -1,7 +1,7 @@
 """Stock alerts page for low inventory warnings."""
 import streamlit as st
-from constants import LOW_STOCK_THRESHOLD_DEFAULT
-from services import get_products
+from core.constants import LOW_STOCK_THRESHOLD_DEFAULT
+from core.services import get_products
 
 
 def render(conn):

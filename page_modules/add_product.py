@@ -1,8 +1,8 @@
 """Add/Edit product page."""
 import streamlit as st
 import sqlite3
-from constants import POS_CATEGORIES
-from services import get_products, add_product, update_product
+from core.constants import POS_CATEGORIES
+from core.services import get_products, add_product, update_product
 
 
 def render(conn):

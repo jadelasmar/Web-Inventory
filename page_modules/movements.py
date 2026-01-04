@@ -1,7 +1,7 @@
 """Movement log page to view transaction history."""
 import streamlit as st
-from constants import MOVEMENT_TYPES
-from services import get_movements
+from core.constants import MOVEMENT_TYPES
+from core.services import get_movements
 
 
 def render(conn):

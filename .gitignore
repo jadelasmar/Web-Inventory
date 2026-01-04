@@ -16,6 +16,7 @@ __pycache__/
 *.db-journal
 *.db-wal
 bimpos_inventory.db
+data/*.db
 backups/
 
 # Testing

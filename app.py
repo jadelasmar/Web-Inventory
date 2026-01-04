@@ -1,6 +1,6 @@
 """BIM POS Inventory - Main Application Entry Point."""
 import streamlit as st
-from db_init import init_db
+from core.db_init import init_db
 from ui.sidebar import render_sidebar_menu, render_backup
 
 # Import page render functions

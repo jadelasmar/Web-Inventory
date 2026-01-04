@@ -1,6 +1,6 @@
 """Inventory view page."""
 import streamlit as st
-from services import get_products
+from core.services import get_products
 from ui.components import maybe_open_image_modal, render_products_table
 
 

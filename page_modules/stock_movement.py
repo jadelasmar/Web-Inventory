@@ -2,8 +2,8 @@
 import streamlit as st
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from constants import MOVEMENT_TYPES
-from services import get_products, record_movement
+from core.constants import MOVEMENT_TYPES
+from core.services import get_products, record_movement
 
 # Lebanon timezone
 LEBANON_TZ = ZoneInfo("Asia/Beirut")

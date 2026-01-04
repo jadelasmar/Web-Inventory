@@ -2,19 +2,6 @@
 """Project-wide constants and configuration helpers."""
 from typing import List
 import os
-from pathlib import Path
-
-# Optionally load environment variables from a local .env file
-# if python-dotenv is installed. This keeps local development easy.
-try:
-    from dotenv import load_dotenv  # type: ignore
-
-    env_path = Path(__file__).parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
-except Exception:
-    # dotenv is optional; fall back to environment variables.
-    pass
 
 POS_CATEGORIES: List[str] = [
     "POS System",

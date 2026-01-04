@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from services import get_products, get_movements
+from core.services import get_products, get_movements
 
 
 def render(conn):

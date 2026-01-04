@@ -1,7 +1,7 @@
 """Sidebar menu and admin authentication."""
 import streamlit as st
-from constants import ADMIN_PASSWORD
-from services import backup_database
+from core.constants import ADMIN_PASSWORD
+from core.services import backup_database
 
 
 def render_sidebar_menu():
