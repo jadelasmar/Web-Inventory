@@ -4,9 +4,6 @@ __pycache__/
 # Virtual environment
 .venv/
 
-# VS Code settings
-.vscode/
-
 # Secrets - IMPORTANT: Never commit these!
 .env
 .streamlit/secrets.toml
