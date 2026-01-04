@@ -18,6 +18,7 @@ A cloud-ready web-based inventory management system built with Streamlit and Pos
 Web-Inventory/
 ├── app.py                    # Main entry point
 ├── requirements.txt          # Dependencies
+├── runtime.txt              # Python version for deployment
 │
 ├── core/                     # Core application logic
 │   ├── constants.py         # Configuration and constants
@@ -36,11 +37,6 @@ Web-Inventory/
 │   ├── sidebar.py           # Navigation & auth
 │   └── components.py        # Reusable UI elements
 │
-├── docs/                    # Documentation
-│   ├── DATABASE_SETUP.md    # Database setup guide
-│   ├── DEPLOYMENT.md        # Deployment guide
-│   └── QUICK_START.md       # Quick start guide
-│
 ├── .streamlit/              # Streamlit configuration
 │   ├── config.toml          # App settings
 │   └── secrets.toml.example # Secrets template
@@ -48,46 +44,88 @@ Web-Inventory/
 └── data/                    # Local database files
 ```
 
-## 🚀 Deployment
+## 🚀 Quick Deployment (3 Steps)
 
-This app is designed to run on **Streamlit Community Cloud** with **PostgreSQL**.
+### 1. Set Up PostgreSQL Database (5 minutes)
 
-### Quick Deploy:
-1. **Set up free PostgreSQL** (Supabase/Neon) - See [docs/DATABASE_SETUP.md](docs/DATABASE_SETUP.md)
-2. **Deploy to Streamlit Cloud** - See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-3. **Add database secrets** in Streamlit Cloud settings
+**Option A: Supabase (Recommended)**
+1. Go to https://supabase.com and sign in with GitHub
+2. Create new project: `bimpos-inventory`
+3. Set a strong password and save it
+4. Wait 2-3 minutes for initialization
+5. Go to Project Settings → Database
+6. Copy connection details:
+   - Host: `db.xxxxx.supabase.co`
+   - Port: `5432`
+   - Database: `postgres`
+   - User: `postgres`
 
-**Full guides:**
-- 📖 [Database Setup Guide](docs/DATABASE_SETUP.md) - Set up PostgreSQL
-- 📖 [Deployment Guide](docs/DEPLOYMENT.md) - Deploy to Streamlit Cloud
-- 📖 [Quick Start Guide](docs/QUICK_START.md) - Get started quickly
+**Option B: Neon (Alternative - 3GB free)**
+- Go to https://neon.tech and create a project
+
+### 2. Deploy to Streamlit Cloud (3 minutes)
+
+1. Go to https://streamlit.io/cloud
+2. Sign in with GitHub
+3. Click "New app"
+4. Fill in:
+   - Repository: `jadelasmar/Web-Inventory`
+   - Branch: `main`
+   - Main file: `app.py`
+5. Click "Deploy"
+
+### 3. Add Database Secrets (2 minutes)
+
+1. In your Streamlit app dashboard, click "⚙️" → "Secrets"
+2. Paste your database credentials:
+
+```toml
+[postgres]
+host = "db.xxxxx.supabase.co"
+port = 5432
+database = "postgres"
+user = "postgres"
+password = "your-password-here"
+```
+
+3. Save → App restarts automatically ✅
+
+**Your app is now live!** Get the URL like: `https://web-inventory-[random].streamlit.app`
 
 ## 💻 Local Development
 
-### Option 1: SQLite (No Setup Required)
+### Quick Start (SQLite - No Setup)
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
-The app will automatically use SQLite for local development.
+The app uses SQLite automatically for local development.
 
-### Option 2: Connect to PostgreSQL
+### Use PostgreSQL Locally (Optional)
 1. Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`
-2. Add your PostgreSQL credentials
+2. Add your Supabase/Neon credentials
 3. Run: `streamlit run app.py`
 
 ## 🗄️ Database
 
-- **Production**: PostgreSQL (Supabase/Neon) - Persistent, reliable storage
-- **Local Dev**: SQLite (default) - No setup needed, automatic fallback
-
-The app automatically detects which database to use based on environment.
+- **Production**: PostgreSQL (Supabase/Neon) - Persistent, cloud storage
+- **Local Dev**: SQLite (default) - Automatic fallback, no setup
 
 ## 🔐 Admin Access
 
-Default admin password: `admin`
+Default password: `admin`
 
-Change it by setting `ADMIN_PASSWORD` in Streamlit Cloud secrets:
+**To change:** Add to Streamlit Cloud secrets:
 ```toml
 ADMIN_PASSWORD = "your-secure-password"
+```
+
+## 🔄 Auto-Deploy
+
+Push changes to GitHub → Streamlit Cloud automatically redeploys in ~2 minutes!
+
+```bash
+git add .
+git commit -m "Your changes"
+git push
 ```
