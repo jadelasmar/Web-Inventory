@@ -76,6 +76,22 @@ def init_db(conn: DBConnection) -> None:
         """
     )
     
+    # Users table for authentication
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS users (
+            id {id_type},
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT,
+            approved_by TEXT
+        )
+        """
+    )
+    
     # Add foreign key for PostgreSQL (SQLite doesn't enforce it by default)
     if is_pg:
         try:
@@ -350,18 +366,101 @@ def get_movements(
 
 def backup_database(
     src: str = "data/bimpos_inventory.db",
-    backups_dir: str = "backups",
+    dest_dir: str = "backups",
 ) -> str:
-    """Create a dated copy of the DB in the backups directory."""
+    """Create a timestamped backup copy of the database."""
+    os.makedirs(dest_dir, exist_ok=True)
+    timestamp_str = datetime.now(LEBANON_TZ).strftime("%Y%m%d_%H%M%S")
+    dest = os.path.join(dest_dir, f"backup_{timestamp_str}.db")
+    if not os.path.exists(src):
+        return f"Source database not found: {src}"
+    shutil.copyfile(src, dest)
+    return f"Backup created: {dest}"
+
+
+# ============================================================================
+# User Management Functions
+# ============================================================================
+
+def get_all_users(conn: DBConnection) -> pd.DataFrame:
+    """Get all users from database."""
     try:
-        os.makedirs(backups_dir, exist_ok=True)
-        timestamp = datetime.now(LEBANON_TZ).strftime("%Y%m%d_%H%M%S")
-        backup_file = os.path.join(
-            backups_dir,
-            f"bimpos_backup_{timestamp}.db",
-        )
-        shutil.copy2(src, backup_file)
-        return "Backup created: " + backup_file
+        query = "SELECT id, username, name, role, status, created_at, approved_by FROM users ORDER BY created_at DESC"
+        return pd.read_sql(query, conn)
     except Exception as e:
-        logger.exception("Backup failed: %s", e)
-        return "Backup failed: " + str(e)
+        logger.exception("Failed to read users: %s", e)
+        return pd.DataFrame()
+
+
+def get_pending_users(conn: DBConnection) -> pd.DataFrame:
+    """Get all pending users."""
+    try:
+        query = "SELECT id, username, name, role, created_at FROM users WHERE status = 'pending' ORDER BY created_at ASC"
+        return pd.read_sql(query, conn)
+    except Exception as e:
+        logger.exception("Failed to read pending users: %s", e)
+        return pd.DataFrame()
+
+
+def approve_user(conn: DBConnection, user_id: int, approved_by: str) -> bool:
+    """Approve a pending user."""
+    cur = conn.cursor()
+    try:
+        if is_postgres(conn):
+            cur.execute("UPDATE users SET status = %s, approved_by = %s WHERE id = %s", ('approved', approved_by, user_id))
+        else:
+            cur.execute("UPDATE users SET status = ?, approved_by = ? WHERE id = ?", ('approved', approved_by, user_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        logger.exception("Failed to approve user: %s", e)
+        return False
+
+
+def reject_user(conn: DBConnection, user_id: int) -> bool:
+    """Reject a pending user (delete them)."""
+    cur = conn.cursor()
+    try:
+        if is_postgres(conn):
+            cur.execute("DELETE FROM users WHERE id = %s AND status = %s", (user_id, 'pending'))
+        else:
+            cur.execute("DELETE FROM users WHERE id = ? AND status = ?", (user_id, 'pending'))
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        logger.exception("Failed to reject user: %s", e)
+        return False
+
+
+def delete_user(conn: DBConnection, user_id: int) -> bool:
+    """Delete a user (owner only)."""
+    cur = conn.cursor()
+    try:
+        if is_postgres(conn):
+            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        else:
+            cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        logger.exception("Failed to delete user: %s", e)
+        return False
+
+
+def update_user_role(conn: DBConnection, user_id: int, new_role: str) -> bool:
+    """Update user role (owner only)."""
+    cur = conn.cursor()
+    try:
+        if is_postgres(conn):
+            cur.execute("UPDATE users SET role = %s WHERE id = %s", (new_role, user_id))
+        else:
+            cur.execute("UPDATE users SET role = ? WHERE id = ?", (new_role, user_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        logger.exception("Failed to update user role: %s", e)
+        return False

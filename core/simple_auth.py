@@ -1,0 +1,284 @@
+"""Simple authentication module without external dependencies."""
+import streamlit as st
+import hashlib
+import json
+import os
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+LEBANON_TZ = ZoneInfo("Asia/Beirut")
+SESSION_FILE = ".streamlit/user_session.json"
+SESSION_DURATION_DAYS = 30  # Stay logged in for 30 days
+
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256."""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def save_session(username: str, name: str, role: str):
+    """Save user session to file."""
+    try:
+        os.makedirs(".streamlit", exist_ok=True)
+        session_data = {
+            'username': username,
+            'name': name,
+            'role': role,
+            'expires': (datetime.now(LEBANON_TZ) + timedelta(days=SESSION_DURATION_DAYS)).isoformat()
+        }
+        with open(SESSION_FILE, 'w') as f:
+            json.dump(session_data, f)
+    except Exception:
+        pass
+
+
+def load_session():
+    """Load user session from file if valid.
+    Returns: (username, name, role) or (None, None, None)
+    """
+    try:
+        if not os.path.exists(SESSION_FILE):
+            return None, None, None
+        
+        with open(SESSION_FILE, 'r') as f:
+            session_data = json.load(f)
+        
+        # Check if session has expired
+        expires = datetime.fromisoformat(session_data['expires'])
+        if datetime.now(LEBANON_TZ) > expires:
+            clear_session()
+            return None, None, None
+        
+        return session_data['username'], session_data['name'], session_data['role']
+    except Exception:
+        return None, None, None
+
+
+def clear_session():
+    """Delete session file."""
+    try:
+        if os.path.exists(SESSION_FILE):
+            os.remove(SESSION_FILE)
+    except Exception:
+        pass
+
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256."""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def get_bootstrap_users():
+    """Get bootstrap owner from secrets.toml (used for initial access)."""
+    try:
+        if 'users' in st.secrets:
+            return dict(st.secrets['users'])
+    except Exception:
+        pass
+    return {}
+
+
+def get_db_user(conn, username: str):
+    """Get user from database."""
+    cur = conn.cursor()
+    try:
+        # Check if we're using PostgreSQL or SQLite
+        from core.services import is_postgres
+        if is_postgres(conn):
+            cur.execute("SELECT username, password_hash, name, role, status FROM users WHERE username = %s", (username,))
+        else:
+            cur.execute("SELECT username, password_hash, name, role, status FROM users WHERE username = ?", (username,))
+        
+        row = cur.fetchone()
+        if row:
+            return {
+                'username': row[0],
+                'password_hash': row[1],
+                'name': row[2],
+                'role': row[3],
+                'status': row[4]
+            }
+    except Exception:
+        pass
+    return None
+
+
+def verify_login(conn, username: str, password: str) -> tuple:
+    """Verify login credentials from database or bootstrap users.
+    Returns: (success: bool, name: str, role: str)
+    """
+    password_hash = hash_password(password)
+    
+    # First check bootstrap users from secrets.toml (for owner access)
+    bootstrap_users = get_bootstrap_users()
+    if username in bootstrap_users:
+        user = bootstrap_users[username]
+        if password_hash == user['password_hash']:
+            return True, user['name'], user['role']
+    
+    # Then check database users
+    user = get_db_user(conn, username)
+    if user:
+        # Only allow approved users to login
+        if user['status'] != 'approved':
+            return False, None, None
+        
+        if password_hash == user['password_hash']:
+            return True, user['name'], user['role']
+    
+    return False, None, None
+
+
+def signup_user(conn, username: str, password: str, name: str) -> tuple:
+    """Create new pending user account.
+    Returns: (success: bool, message: str)
+    """
+    if not username or not password or not name:
+        return False, "All fields are required"
+    
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters"
+    
+    if len(password) < 6:
+        return False, "Password must be at least 6 characters"
+    
+    # Check if username exists in bootstrap users
+    bootstrap_users = get_bootstrap_users()
+    if username in bootstrap_users:
+        return False, "Username already exists"
+    
+    # Check if username exists in database
+    if get_db_user(conn, username):
+        return False, "Username already exists"
+    
+    # Create new pending user
+    password_hash = hash_password(password)
+    created_at = datetime.now(LEBANON_TZ).isoformat()
+    
+    cur = conn.cursor()
+    try:
+        from core.services import is_postgres
+        if is_postgres(conn):
+            cur.execute(
+                "INSERT INTO users (username, password_hash, name, role, status, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                (username, password_hash, name, 'viewer', 'pending', created_at)
+            )
+        else:
+            cur.execute(
+                "INSERT INTO users (username, password_hash, name, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (username, password_hash, name, 'viewer', 'pending', created_at)
+            )
+        conn.commit()
+        return True, "Account created! Waiting for admin approval."
+    except Exception as e:
+        conn.rollback()
+        return False, f"Error creating account: {str(e)}"
+
+
+def login_form(conn):
+    """Display login and signup forms."""
+    # Initialize show_signup state
+    if 'show_signup' not in st.session_state:
+        st.session_state.show_signup = False
+    
+    if not st.session_state.show_signup:
+        # Show Login Form
+        st.markdown("### 🔐 Login")
+        with st.form("login_form", clear_on_submit=False):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submit = st.form_submit_button("Login", use_container_width=True)
+            
+            if submit:
+                if username and password:
+                    success, name, role = verify_login(conn, username, password)
+                    
+                    if success:
+                        st.session_state.authenticated = True
+                        st.session_state.username = username
+                        st.session_state.name = name
+                        st.session_state.role = role
+                        st.session_state.admin_mode = (role in ['admin', 'owner'])
+                        
+                        # Save session for auto-login
+                        save_session(username, name, role)
+                        
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid username or password")
+                else:
+                    st.warning("⚠️ Please enter both username and password")
+        
+        # Link to signup
+        if st.button("📝 Don't have an account? Sign up here"):
+            st.session_state.show_signup = True
+            st.rerun()
+    
+    else:
+        # Show Signup Form
+        st.markdown("### 📝 Sign Up")
+        with st.form("signup_form", clear_on_submit=False):
+            new_username = st.text_input("Choose Username", key="signup_username")
+            new_name = st.text_input("Full Name", key="signup_name")
+            new_password = st.text_input("Choose Password", type="password", key="signup_password")
+            confirm_password = st.text_input("Confirm Password", type="password", key="signup_confirm")
+            signup_submit = st.form_submit_button("Sign Up", use_container_width=True)
+            
+            if signup_submit:
+                if new_password != confirm_password:
+                    st.error("❌ Passwords don't match")
+                else:
+                    success, message = signup_user(conn, new_username, new_password, new_name)
+                    if success:
+                        st.success(f"✅ {message}")
+                        st.info("Please wait for admin approval before logging in.")
+                    else:
+                        st.error(f"❌ {message}")
+        
+        # Link back to login
+        if st.button("🔐 Already have an account? Login here"):
+            st.session_state.show_signup = False
+            st.rerun()
+
+
+def logout():
+    """Clear authentication session."""
+    st.session_state.authenticated = False
+    st.session_state.username = None
+    st.session_state.name = None
+    st.session_state.role = None
+    st.session_state.admin_mode = False
+    
+    # Clear saved session
+    clear_session()
+
+
+def require_auth():
+    """Check if user is authenticated. Returns True if authenticated, False otherwise."""
+    # Check if already authenticated in session state
+    if st.session_state.get('authenticated', False):
+        return True
+    
+    # Try to auto-login from saved session
+    username, name, role = load_session()
+    if username:
+        st.session_state.authenticated = True
+        st.session_state.username = username
+        st.session_state.name = name
+        st.session_state.role = role
+        st.session_state.admin_mode = (role in ['admin', 'owner'])
+        return True
+    
+    return False
+
+
+def get_current_user():
+    """Get current user info."""
+    role = st.session_state.get('role')
+    return {
+        'username': st.session_state.get('username'),
+        'name': st.session_state.get('name'),
+        'role': role,
+        'is_admin': role in ['admin', 'owner'],
+        'is_owner': role == 'owner'
+    }

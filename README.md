@@ -7,8 +7,10 @@ A cloud-ready web-based inventory management system built with Streamlit and Pos
 - 📋 View complete inventory with search and filters
 - ⚠️ Stock alerts for low inventory items
 - 🔄 Movement log tracking all inventory changes
-- ➕ Add/Edit products with flexible categories (Admin only)
-- 📦 Stock movement management (Admin only)
+- ➕ Add/Edit products with flexible categories (Admin/Owner only)
+- 📦 Stock movement management (Admin/Owner only)
+- 👥 **User Management** - Signup, approval system, and role-based access
+- 🔐 **Secure Authentication** - Custom login with auto-login sessions
 - 🗄️ **PostgreSQL database** for reliable, persistent data storage
 - ☁️ **Cloud-ready** - Deploy to Streamlit Cloud in minutes
 
@@ -23,7 +25,8 @@ Web-Inventory/
 ├── core/                     # Core application logic
 │   ├── constants.py         # Configuration and constants
 │   ├── services.py          # Database operations
-│   └── db_init.py           # Database initialization
+│   ├── db_init.py           # Database initialization
+│   └── simple_auth.py       # Authentication system
 │
 ├── page_modules/            # Streamlit page modules
 │   ├── dashboard.py         # Dashboard with analytics
@@ -31,15 +34,19 @@ Web-Inventory/
 │   ├── add_product.py       # Add/Edit products
 │   ├── stock_movement.py    # Record movements
 │   ├── alerts.py            # Low stock alerts
-│   └── movements.py         # Movement history
+│   ├── movements.py         # Movement history
+│   └── user_management.py   # User approval & management
 │
 ├── ui/                      # UI components
-│   ├── sidebar.py           # Navigation & auth
+│   ├── sidebar.py           # Navigation & logout
 │   └── components.py        # Reusable UI elements
+│
+├── utils/                   # Utility scripts
+│   └── generate_password_hash.py  # Password hash generator
 │
 ├── .streamlit/              # Streamlit configuration
 │   ├── config.toml          # App settings
-│   └── secrets.toml.example # Secrets template
+│   └── secrets.toml         # Owner account (not in git)
 │
 └── data/                    # Local database files
 ```
@@ -107,14 +114,38 @@ The app uses SQLite automatically for local development.
 - **Production**: PostgreSQL (Supabase) - Persistent, cloud storage
 - **Local Dev**: SQLite (default) - Automatic fallback, no setup
 
-## 🔐 Admin Access
+## 🔐 Authentication & User Management
 
-Default password: `admin`
+### Owner Account Setup
 
-**To change:** Add to Streamlit Cloud secrets:
-```toml
-ADMIN_PASSWORD = "your-secure-password"
+1. **Generate your password hash:**
+```bash
+python utils/generate_password_hash.py
 ```
+
+2. **Create `.streamlit/secrets.toml`** (local development):
+```toml
+[users.YourUsername]
+password_hash = "your-generated-hash-here"
+name = "Your Name"
+role = "owner"
+```
+
+3. **For Streamlit Cloud:** Add the same to Settings → Secrets
+
+### User Roles
+- **Owner** - Full access: approve users, delete users, change roles
+- **Admin** - Can approve/reject users, manage inventory
+- **Viewer** - Read-only access to inventory and reports
+
+### User Signup & Approval
+1. Users sign up through the app's signup form
+2. Accounts are created with "pending" status
+3. Owner/Admin approves users in "👥 User Management" page
+4. Approved users can login and access based on their role
+
+### Auto-Login
+Users stay logged in for 30 days - no need to login repeatedly!
 
 ## 🔄 Auto-Deploy
 
