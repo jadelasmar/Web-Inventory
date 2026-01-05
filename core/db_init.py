@@ -37,7 +37,6 @@ def init_db():
                     options='-c statement_timeout=30000'  # 30 second query timeout
                 )
                 conn.autocommit = False
-                st.success("✅ Connected to PostgreSQL database")
             except Exception as e:
                 st.error(f"⚠️ PostgreSQL connection failed: {str(e)}")
                 st.warning("📝 Check: 1) Supabase project is ACTIVE (not paused), 2) Secrets are correct, 3) Database allows connections")
