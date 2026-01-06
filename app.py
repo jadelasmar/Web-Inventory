@@ -2,6 +2,7 @@
 import streamlit as st
 from core.db_init import init_db
 from core.simple_auth import login_form, require_auth, get_current_user
+from core.mobile_styles import apply_mobile_styles
 from ui.sidebar import render_sidebar_menu, render_backup
 
 # Import page render functions
@@ -13,6 +14,9 @@ st.set_page_config(
     page_icon="💳",
     layout="wide",
 )
+
+# Apply mobile-friendly styles
+apply_mobile_styles()
 
 # Initialize database connection (needed for auth)
 @st.cache_resource

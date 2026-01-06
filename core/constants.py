@@ -20,5 +20,11 @@ POS_CATEGORIES: List[str] = [
     "Other",
 ]
 
-MOVEMENT_TYPES: List[str] = ["PURCHASE", "SALE", "ADJUSTMENT", "REPLACEMENT"]
+MOVEMENT_TYPES: List[str] = [
+    "PURCHASE",      # Buying new stock
+    "SALE",         # Selling to customer permanently
+    "ADJUSTMENT",   # Manual stock correction
+    "RECEIVED",     # Receive printer from customer to work on (stock +)
+    "ISSUED"        # Give temp printer or return fixed printer (stock -)
+]
 LOW_STOCK_THRESHOLD_DEFAULT: int = 5

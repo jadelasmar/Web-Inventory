@@ -1,13 +1,12 @@
 [theme]
-# Use dark theme by default
-base = "dark"
+# Theme can be changed via Settings menu (⋮ → Settings → Theme)
 
 [server]
 headless = true
 enableCORS = false
 port = 8501
 # Performance: Limit file watcher to reduce resource usage on cloud
-fileWatcherType = "none"
+# fileWatcherType = "none"  # Commented out for local development
 # Performance: Reduce max message size if not needed
 maxMessageSize = 200
 
