@@ -202,34 +202,7 @@ def render(conn):
                 st.write("Suggestions:")
                 st.write(", ".join(category_suggestions))
         category = category_match if category_match else (category_input.title() if category_input else "")
-        # Streamlined supplier field: text input with live suggestions and deduplication
-        existing_suppliers = (
-            sorted(set(df["supplier"].dropna().unique()), key=str.casefold)
-            if not df.empty and "supplier" in df.columns
-            else []
-        )
-        supplier_input = st.text_input("Supplier", key="add_supplier")
-        match = next(
-            (
-                s
-                for s in existing_suppliers
-                if s.lower() == (supplier_input or "").lower()
-            ),
-            None,
-        )
-        suggestions = [
-            s
-            for s in existing_suppliers
-            if supplier_input and supplier_input.lower() in s.lower()
-        ]
-        if supplier_input:
-            if match:
-                st.info(f"Will use existing supplier: {match}")
-            else:
-                st.info("This will be a new supplier.")
-            if suggestions and not match:
-                st.write("Suggestions:")
-                st.write(", ".join(suggestions))
+        
         # Add stock input for new product
         stock = st.number_input("Stock", min_value=0, key="add_stock")
         cost = st.number_input(
@@ -245,10 +218,6 @@ def render(conn):
         # Disable add button if required fields are missing
         add_btn_disabled = not name or cost is None or sale is None or stock is None
         if st.button("➕ Add Product", disabled=add_btn_disabled):
-            if not supplier_input:
-                st.toast("Please enter a supplier name.", icon="⚠️")
-                return
-            supplier_to_use = match if match else supplier_input.title()
             try:
                 add_product(
                     conn,
@@ -260,7 +229,7 @@ def render(conn):
                         int(stock),
                         float(cost),
                         float(sale),
-                        supplier_to_use,
+                        "",  # Empty supplier - will be filled when recording movements
                     ),
                 )
             except sqlite3.IntegrityError:
@@ -275,7 +244,6 @@ def render(conn):
                 for k in [
                     "add_name",
                     "add_category",
-                    "add_supplier",
                     "add_cost",
                     "add_sale",
                     "add_stock",

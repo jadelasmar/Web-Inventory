@@ -119,16 +119,16 @@ def render(conn):
                 st.session_state[f"{party_key}_choice"] = default_supplier
         
         supplier_choice = st.selectbox(
-            "Supplier / Customer",
+            "Party",
             supplier_options,
             key=f"{party_key}_choice",
         )
         if supplier_choice == "Add new...":
-            party = st.text_input("Enter new supplier/customer", key=party_key)
+            party = st.text_input("Enter new party", key=party_key)
         else:
             party = supplier_choice
     else:
-        party = st.text_input("Supplier / Customer", key=party_key)
+        party = st.text_input("Party", key=party_key)
 
     notes_key = f"move_notes_{selected_product}"
     notes = st.text_area("Notes", key=notes_key)
