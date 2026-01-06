@@ -180,7 +180,7 @@ def update_product(conn: DBConnection, data: tuple) -> None:
 
 
 def delete_product(conn: DBConnection, name: str) -> None:
-    """Soft-delete a product by marking it inactive (isactive=0)."""
+    """Soft-delete a product by marking it inactive (isactive=0). Owner only."""
     placeholder = "%s" if is_postgres(conn) else "?"
     cur = conn.cursor()
     cur.execute(f"UPDATE products SET isactive=0 WHERE name={placeholder}", (name,))
@@ -188,7 +188,7 @@ def delete_product(conn: DBConnection, name: str) -> None:
 
 
 def restore_product(conn: DBConnection, name: str) -> None:
-    """Restore a previously soft-deleted product (isactive=1)."""
+    """Restore a previously soft-deleted product (isactive=1). Owner only."""
     placeholder = "%s" if is_postgres(conn) else "?"
     cur = conn.cursor()
     cur.execute(f"UPDATE products SET isactive=1 WHERE name={placeholder}", (name,))
@@ -362,6 +362,45 @@ def get_movements(
     types_tuple = tuple(types) if types else None
     cache_key = f"movements_{days}_{types_tuple}_{datetime.now().timestamp()}"
     return _fetch_movements(cache_key, days, types_tuple)
+
+
+def delete_movement(conn: DBConnection, movement_id: int) -> None:
+    """Delete a movement record and adjust stock accordingly. Owner only."""
+    placeholder = "%s" if is_postgres(conn) else "?"
+    cursor = conn.cursor()
+    
+    # First, get the movement details to reverse the stock change
+    cursor.execute(
+        f"SELECT product_name, movement_type, quantity FROM movements WHERE id={placeholder}",
+        (movement_id,),
+    )
+    row = cursor.fetchone()
+    if row:
+        product_name, movement_type, quantity = row
+        
+        # Reverse the stock adjustment:
+        # PURCHASE/RECEIVED added stock, so subtract it back
+        # SALE/ISSUED subtracted stock, so add it back
+        # ADJUSTMENT could be +/-, reverse the sign
+        if movement_type in ["PURCHASE", "RECEIVED"]:
+            stock_adjustment = -quantity  # Subtract what was added
+        elif movement_type in ["SALE", "ISSUED"]:
+            stock_adjustment = quantity  # Add back what was subtracted
+        else:  # ADJUSTMENT
+            stock_adjustment = -quantity  # Reverse the adjustment
+        
+        # Update product stock
+        cursor.execute(
+            f"UPDATE products SET stock = stock + {placeholder} WHERE name = {placeholder}",
+            (stock_adjustment, product_name),
+        )
+    
+    # Delete the movement
+    cursor.execute(
+        f"DELETE FROM movements WHERE id={placeholder}",
+        (movement_id,),
+    )
+    conn.commit()
 
 
 def backup_database(

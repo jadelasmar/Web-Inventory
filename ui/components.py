@@ -23,7 +23,7 @@ def maybe_open_image_modal():
         except Exception:
             pass
         with st.modal(vname or "Image"):
-            st.image(view, use_column_width=True)
+            st.image(view, width=600)
         st.query_params.clear()
 
 

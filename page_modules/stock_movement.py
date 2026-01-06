@@ -102,11 +102,33 @@ def render(conn):
     # For ADJUSTMENT/REPLACEMENT, treat price as 'NA' in movement log
     price_to_log = price if not price_disabled else "N/A"
 
+    # Supplier/Customer with dropdown of existing suppliers
+    existing_suppliers = (
+        sorted(set(df["supplier"].dropna().unique()), key=str.casefold)
+        if not df.empty and "supplier" in df.columns
+        else []
+    )
     party_key = f"move_party_{selected_product}"
-    # Auto-fill supplier if movement type is PURCHASE and not already set
-    if mtype == "PURCHASE" and not st.session_state.get(party_key):
-        st.session_state[party_key] = row.get("supplier", "")
-    party = st.text_input("Supplier / Customer", key=party_key)
+    
+    if existing_suppliers:
+        supplier_options = existing_suppliers + ["Add new..."]
+        # Auto-fill supplier if movement type is PURCHASE
+        if mtype == "PURCHASE" and not st.session_state.get(f"{party_key}_choice"):
+            default_supplier = row.get("supplier", "")
+            if default_supplier in supplier_options:
+                st.session_state[f"{party_key}_choice"] = default_supplier
+        
+        supplier_choice = st.selectbox(
+            "Supplier / Customer",
+            supplier_options,
+            key=f"{party_key}_choice",
+        )
+        if supplier_choice == "Add new...":
+            party = st.text_input("Enter new supplier/customer", key=party_key)
+        else:
+            party = supplier_choice
+    else:
+        party = st.text_input("Supplier / Customer", key=party_key)
 
     notes_key = f"move_notes_{selected_product}"
     notes = st.text_area("Notes", key=notes_key)
@@ -151,8 +173,10 @@ def render(conn):
             msg = f"📦 {mtype} of {qty_val} units for {row['name']} recorded"
             st.session_state["movement_recorded_success"] = True
             st.session_state["movement_recorded_msg"] = msg
-            # set flag to clear quantity and rerun
-            st.session_state[f"clear_{qty_key}"] = True
+            # Clear all movement fields
+            for key in list(st.session_state.keys()):
+                if key.startswith(f"move_") and selected_product in key:
+                    del st.session_state[key]
             st.rerun()
     # Show client-side error messaging next to the form controls
     if insufficient_stock:

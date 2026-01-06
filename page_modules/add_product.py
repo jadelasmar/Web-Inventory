@@ -2,7 +2,8 @@
 import streamlit as st
 import sqlite3
 from core.constants import POS_CATEGORIES
-from core.services import get_products, add_product, update_product
+from core.services import get_products, add_product, update_product, delete_product, restore_product
+from core.simple_auth import get_current_user
 
 
 def render(conn):
@@ -30,11 +31,22 @@ def render(conn):
 
     # ---------- Edit Existing Product (persistent fields) ----------
     if mode == "📝 Edit Existing Product" and not df.empty:
-        selected = st.selectbox(
+        # Add indicator for inactive products (Owner only)
+        user = get_current_user()
+        product_names = df["name"].tolist()
+        if user['role'] == 'owner' and "isactive" in df.columns:
+            product_names = [
+                f"{name} {'✅' if df[df['name']==name].iloc[0]['isactive']==1 else '❌ (Inactive)'}"
+                for name in df["name"]
+            ]
+        
+        selected_display = st.selectbox(
             "Select Product",
-            df["name"],
+            product_names,
             key="edit_selected",
         )
+        # Extract actual product name (remove status indicator)
+        selected = selected_display.split(" ")[0] if user['role'] == 'owner' else selected_display
 
         # When selected product changes, initialize/edit fields from DB
         if st.session_state.get("edit_selected_prev") != selected:
@@ -76,41 +88,37 @@ def render(conn):
                 st.write("Suggestions:")
                 st.write(", ".join(category_suggestions))
         category = category_match if category_match else (category_input.title() if category_input else "")
-        # Supplier deduplication for edit mode
+        
+        # Supplier input with live suggestions and deduplication (same as Create mode)
         existing_suppliers = (
             sorted(set(df["supplier"].dropna().unique()), key=str.casefold)
             if not df.empty and "supplier" in df.columns
             else []
         )
-        supplier_options = existing_suppliers + ["Add new..."]
-        current_supplier = st.session_state.get("edit_supplier", "")
-        supplier_select_default = (
-            supplier_options.index(current_supplier)
-            if current_supplier in supplier_options
-            else 0
+        supplier_input = st.text_input("Supplier", key="edit_supplier")
+        supplier_match = next(
+            (
+                s
+                for s in existing_suppliers
+                if s.lower() == (supplier_input or "").lower()
+            ),
+            None,
         )
-        supplier_choice = st.selectbox(
-            "Supplier",
-            supplier_options,
-            index=supplier_select_default,
-            key="edit_supplier_select",
-        )
-        if supplier_choice == "Add new...":
-            supplier = st.text_input("Enter new supplier", key="edit_supplier")
-            # Check for case-insensitive match
-            match = next(
-                (
-                    s
-                    for s in existing_suppliers
-                    if s.lower() == (supplier or "").lower()
-                ),
-                None,
-            )
-            if supplier:
-                if match:
-                    st.warning(f"Already exists as: {match}. Will use existing.")
-        else:
-            supplier = supplier_choice
+        supplier_suggestions = [
+            s
+            for s in existing_suppliers
+            if supplier_input and supplier_input.lower() in s.lower()
+        ]
+        if supplier_input:
+            if supplier_match:
+                st.info(f"Will use existing supplier: {supplier_match}")
+            else:
+                st.info("This will be a new supplier.")
+            if supplier_suggestions and not supplier_match:
+                st.write("Suggestions:")
+                st.write(", ".join(supplier_suggestions))
+        supplier = supplier_match if supplier_match else supplier_input
+        
         # When keys are set in `st.session_state` (above) avoid passing an
         # explicit `value=` to the widget — Streamlit warns if a widget is
         # created with both a default value and a session-state value.
@@ -118,21 +126,42 @@ def render(conn):
         sale = st.number_input("Price", key="edit_sale")
         desc = st.text_area("Description", key="edit_desc")
         image = st.text_input("Image URL", key="edit_image")
-        if st.button("💾 Update Product"):
-            update_product(
-                conn,
-                (
-                    category,
-                    desc,
-                    image,
-                    float(cost),
-                    float(sale),
-                    supplier,
-                    selected,
-                ),
-            )
-            msg = f"✅ Product '{selected}' updated"
-            st.toast(msg, icon="💾")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            if st.button("💾 Update Product", use_container_width=True):
+                update_product(
+                    conn,
+                    (
+                        category,
+                        desc,
+                        image,
+                        float(cost),
+                        float(sale),
+                        supplier,
+                        selected,
+                    ),
+                )
+                msg = f"✅ Product '{selected}' updated"
+                st.toast(msg, icon="💾")
+        
+        # Owner-only: Delete/Restore product
+        with col2:
+            user = get_current_user()
+            if user['role'] == 'owner':
+                product = df[df["name"] == selected].iloc[0]
+                is_active = product.get("isactive", 1) == 1
+                
+                if is_active:
+                    if st.button("🗑️ Delete", use_container_width=True):
+                        delete_product(conn, selected)
+                        st.success(f"Deleted '{selected}'")
+                        st.rerun()
+                else:
+                    if st.button("♻️ Restore", use_container_width=True):
+                        restore_product(conn, selected)
+                        st.success(f"Restored '{selected}'")
+                        st.rerun()
 
     # ---------- Create New Product (persistent fields) ----------
     else:
