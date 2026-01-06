@@ -33,6 +33,6 @@ def render(conn):
             "<style>td {vertical-align: middle !important;}</style>",
             unsafe_allow_html=True,
         )
-        st.dataframe(display_df, width='stretch', hide_index=True)
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
     else:
         st.info(f"No products at or below the threshold ({threshold})")

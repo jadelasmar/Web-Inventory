@@ -175,6 +175,6 @@ def render(conn):
                 "movement_date": "Date",
             }
         )
-        st.dataframe(recent_movements, width='stretch', hide_index=True)
+        st.dataframe(recent_movements, use_container_width=True, hide_index=True)
     else:
         st.info("No recent activity")
