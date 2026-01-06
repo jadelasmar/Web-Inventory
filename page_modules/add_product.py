@@ -33,20 +33,24 @@ def render(conn):
     if mode == "📝 Edit Existing Product" and not df.empty:
         # Add indicator for inactive products (Owner only)
         user = get_current_user()
-        product_names = df["name"].tolist()
+        product_names_original = df["name"].tolist()
+        product_names_display = product_names_original.copy()
+        
         if user['role'] == 'owner' and "isactive" in df.columns:
-            product_names = [
+            product_names_display = [
                 f"{name} {'✅' if df[df['name']==name].iloc[0]['isactive']==1 else '❌ (Inactive)'}"
-                for name in df["name"]
+                for name in product_names_original
             ]
         
         selected_display = st.selectbox(
             "Select Product",
-            product_names,
+            product_names_display,
             key="edit_selected",
         )
-        # Extract actual product name (remove status indicator)
-        selected = selected_display.split(" ")[0] if user['role'] == 'owner' else selected_display
+        
+        # Map display name back to actual product name
+        selected_index = product_names_display.index(selected_display)
+        selected = product_names_original[selected_index]
 
         # When selected product changes, initialize/edit fields from DB
         if st.session_state.get("edit_selected_prev") != selected:
