@@ -20,35 +20,41 @@ A cloud-ready web-based inventory management system built with Streamlit and Pos
 Web-Inventory/
 ├── app.py                    # Main entry point
 ├── requirements.txt          # Dependencies
-├── runtime.txt              # Python version for deployment
+├── runtime.txt               # Python version for deployment
 │
 ├── core/                     # Core application logic
-│   ├── constants.py         # Configuration and constants
-│   ├── services.py          # Database operations
-│   ├── db_init.py           # Database initialization
-│   └── simple_auth.py       # Authentication system
+│   ├── constants.py          # Configuration and constants
+│   ├── services.py           # Database operations
+│   ├── db_init.py            # Database initialization
+│   ├── mobile_styles.py      # Mobile CSS tweaks
+│   └── simple_auth.py        # Authentication system
 │
-├── page_modules/            # Streamlit page modules
-│   ├── dashboard.py         # Dashboard with analytics
-│   ├── inventory.py         # Inventory view
-│   ├── add_product.py       # Add/Edit products
-│   ├── stock_movement.py    # Record movements
-│   ├── alerts.py            # Low stock alerts
-│   ├── movements.py         # Movement history
-│   └── user_management.py   # User approval & management
+├── page_modules/             # Streamlit page modules
+│   ├── dashboard.py          # Dashboard with analytics
+│   ├── inventory.py          # Inventory view
+│   ├── add_product.py        # Add/Edit products
+│   ├── stock_movement.py     # Record movements
+│   ├── alerts.py             # Low stock alerts
+│   ├── movements.py          # Movement history
+│   └── user_management.py    # User approval & management
 │
-├── ui/                      # UI components
-│   ├── sidebar.py           # Navigation & logout
-│   └── components.py        # Reusable UI elements
+├── ui/                       # UI components
+│   ├── sidebar.py            # Navigation & logout
+│   └── components.py         # Reusable UI elements
 │
-├── utils/                   # Utility scripts
+├── utils/                    # Utility scripts
 │   └── generate_password_hash.py  # Password hash generator
 │
-├── .streamlit/              # Streamlit configuration
-│   ├── config.toml          # App settings
-│   └── secrets.toml         # Owner account (not in git)
+├── assets/                   # Static assets (images, etc.)
+│   └── product_images/       # Product images for inventory
 │
-└── data/                    # Local database files
+├── data/                     # Local database files
+│
+├── .streamlit/               # Streamlit configuration
+│   ├── config.toml           # App settings
+│   └── secrets.toml          # Owner account (not in git)
+│
+└── .devcontainer/            # (Optional) VS Code Dev Container config
 ```
 
 ## 🚀 Quick Deployment (3 Steps)

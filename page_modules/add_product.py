@@ -4,6 +4,8 @@ import sqlite3
 from core.constants import POS_CATEGORIES
 from core.services import get_products, add_product, update_product, delete_product, restore_product
 from core.simple_auth import get_current_user
+import os
+from pathlib import Path
 
 
 def render(conn):
@@ -130,6 +132,14 @@ def render(conn):
         sale = st.number_input("Price", key="edit_sale")
         desc = st.text_area("Description", key="edit_desc")
         image = st.text_input("Image URL", key="edit_image")
+        # Auto-assign image if field is empty and file exists in assets/product_images
+        if not image:
+            image_dir = Path("assets/product_images")
+            for ext in [".png", ".jpg", ".jpeg", ".gif", ".webp"]:
+                candidate = image_dir / f"{selected}{ext}"
+                if candidate.exists():
+                    image = str(candidate)
+                    break
         
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -219,6 +229,14 @@ def render(conn):
         )
         desc = st.text_area("Description", key="add_desc")
         image = st.text_input("Image URL", key="add_image")
+        # Auto-assign image if field is empty and file exists in assets/product_images
+        if not image:
+            image_dir = Path("assets/product_images")
+            for ext in [".png", ".jpg", ".jpeg", ".gif", ".webp"]:
+                candidate = image_dir / f"{name}{ext}"
+                if candidate.exists():
+                    image = str(candidate)
+                    break
         # Disable add button if required fields are missing
         add_btn_disabled = not name or cost is None or sale is None or stock is None
         if st.button("➕ Add Product", disabled=add_btn_disabled):
