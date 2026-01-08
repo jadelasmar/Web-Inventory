@@ -1,7 +1,6 @@
 """Reusable UI components."""
 import streamlit as st
 from urllib.parse import unquote_plus
-import pandas as pd
 import base64
 from pathlib import Path
 
@@ -31,27 +30,6 @@ def image_to_base64(image_path):
     except Exception:
         return image_path
 
-def maybe_open_image_modal():
-    """Open an in-page modal if URL query contains view_image param, then clear params."""
-    try:
-        qp = st.query_params
-    except Exception:
-        return
-    view = qp.get("view_image", None)
-    vname = qp.get("view_name", None)
-    if isinstance(view, list):
-        view = view[0]
-    if isinstance(vname, list):
-        vname = vname[0]
-    if view:
-        try:
-            view = unquote_plus(view)
-            vname = unquote_plus(vname) if vname else vname
-        except Exception:
-            pass
-        with st.modal(vname or "Image"):
-            st.image(view, width=600)
-        st.query_params.clear()
 
 def render_products_table(df, conn):
     """Render products as a table with image thumbnails."""

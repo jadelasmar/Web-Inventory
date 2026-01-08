@@ -3,12 +3,15 @@
 Schema creation is delegated to `services.init_db(conn)` to avoid 
 duplicated table definitions.
 """
+import logging
 import os
 import sqlite3
 
 import streamlit as st
 
 from core.services import init_db as init_schema
+
+logger = logging.getLogger(__name__)
 
 
 def init_db():
@@ -38,6 +41,7 @@ def init_db():
                 )
                 conn.autocommit = False
             except Exception as e:
+                logger.exception('PostgreSQL connection failed')
                 st.error(f"⚠️ PostgreSQL connection failed: {str(e)}")
                 st.warning("📝 Check: 1) Supabase project is ACTIVE (not paused), 2) Secrets are correct, 3) Database allows connections")
                 st.info("Using SQLite as fallback...")
@@ -45,7 +49,8 @@ def init_db():
         else:
             # Fallback to SQLite for local development
             conn = sqlite3.connect("data/bimpos_inventory.db", check_same_thread=False)
-    except:
+    except Exception:
+        logger.exception('Database initialization fallback to SQLite')
         # If secrets file doesn't exist or any other error, use SQLite
         conn = sqlite3.connect("data/bimpos_inventory.db", check_same_thread=False)
     

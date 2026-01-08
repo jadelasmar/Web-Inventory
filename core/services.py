@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
-import shutil
 import sqlite3
 from datetime import datetime
 from typing import Iterable, Optional, Union
@@ -177,6 +175,10 @@ def update_product(conn: DBConnection, data: tuple) -> None:
         data,
     )
     conn.commit()
+    # Invalidate products cache
+    st.session_state["products_cache_version"] = st.session_state.get(
+        "products_cache_version", 0
+    ) + 1
 
 
 def delete_product(conn: DBConnection, name: str) -> None:
@@ -185,6 +187,10 @@ def delete_product(conn: DBConnection, name: str) -> None:
     cur = conn.cursor()
     cur.execute(f"UPDATE products SET isactive=0 WHERE name={placeholder}", (name,))
     conn.commit()
+    # Invalidate products cache
+    st.session_state["products_cache_version"] = st.session_state.get(
+        "products_cache_version", 0
+    ) + 1
 
 
 def restore_product(conn: DBConnection, name: str) -> None:
@@ -193,6 +199,10 @@ def restore_product(conn: DBConnection, name: str) -> None:
     cur = conn.cursor()
     cur.execute(f"UPDATE products SET isactive=1 WHERE name={placeholder}", (name,))
     conn.commit()
+    # Invalidate products cache
+    st.session_state["products_cache_version"] = st.session_state.get(
+        "products_cache_version", 0
+    ) + 1
 
 
 def record_movement(conn: DBConnection, data: tuple) -> None:
@@ -227,59 +237,71 @@ def record_movement(conn: DBConnection, data: tuple) -> None:
 
     placeholder = "%s" if is_postgres(conn) else "?"
     cur = conn.cursor()
-    # read current stock and active flag
-    cur.execute(
-        f"SELECT current_stock, COALESCE(isactive,1) FROM products WHERE name={placeholder}",
-        (product_name,),
-    )
-    row = cur.fetchone()
-    if row is None:
-        raise ValueError(f"Product not found: {product_name}")
+    try:
+        # read current stock and active flag
+        cur.execute(
+            f"SELECT current_stock, COALESCE(isactive,1) FROM products WHERE name={placeholder}",
+            (product_name,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise ValueError(f"Product not found: {product_name}")
 
-    current = int(row[0] or 0)
-    isactive = int(row[1] or 1)
-    if isactive == 0:
-        raise ValueError(f"Product is inactive: {product_name}")
+        current = int(row[0] or 0)
+        isactive = int(row[1] or 1)
+        if isactive == 0:
+            raise ValueError(f"Product is inactive: {product_name}")
 
-    # Decrement on SALE, increment otherwise. Do not allow negative stock;
-    # raise an error if a sale exceeds current stock.
-    if movement_type == "SALE":
-        if int(quantity) > current:
-            raise ValueError(
-                f"Insufficient stock for sale of {product_name}: requested {int(quantity)}, available {current}"
-            )
-        new_stock = current - int(quantity)
-    else:
-        new_stock = current + int(quantity)
+        # Decrement on SALE/ISSUED, increment otherwise. Do not allow negative stock;
+        # raise an error if a sale/issue exceeds current stock.
+        if movement_type in ("SALE", "ISSUED"):
+            if int(quantity) > current:
+                raise ValueError(
+                    f"Insufficient stock for {movement_type.lower()} of {product_name}: requested {int(quantity)}, available {current}"
+                )
+            new_stock = current - int(quantity)
+        else:
+            new_stock = current + int(quantity)
 
-    # If price is 'N/A', store as None (NULL in DB)
-    price_db = None if price in (None, "", "N/A") else float(price)
-    
-    cur.execute(
-        f"UPDATE products SET current_stock={placeholder} WHERE name={placeholder}",
-        (new_stock, product_name),
-    )
-    
-    placeholders_list = ", ".join([placeholder] * 8)
-    cur.execute(
-        f"""
-        INSERT INTO movements (product_name, product_category, 
-                             movement_type, quantity, price, supplier_customer, 
-                             notes, movement_date) 
-        VALUES ({placeholders_list})
-        """,
-        (
-            product_name,
-            data[1],
-            movement_type,
-            int(quantity),
-            price_db,
-            supplier_customer,
-            notes,
-            movement_date,
-        ),
-    )
-    conn.commit()
+        # If price is 'N/A', store as None (NULL in DB)
+        price_db = None if price in (None, "", "N/A") else float(price)
+
+        cur.execute(
+            f"UPDATE products SET current_stock={placeholder} WHERE name={placeholder}",
+            (new_stock, product_name),
+        )
+
+        placeholders_list = ", ".join([placeholder] * 8)
+        cur.execute(
+            f"""
+            INSERT INTO movements (product_name, product_category, 
+                                 movement_type, quantity, price, supplier_customer, 
+                                 notes, movement_date) 
+            VALUES ({placeholders_list})
+            """,
+            (
+                product_name,
+                data[1],
+                movement_type,
+                int(quantity),
+                price_db,
+                supplier_customer,
+                notes,
+                movement_date,
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        # Invalidate products + movements cache
+        st.session_state["products_cache_version"] = st.session_state.get(
+            "products_cache_version", 0
+        ) + 1
+        st.session_state["movements_cache_version"] = st.session_state.get(
+            "movements_cache_version", 0
+        ) + 1
 
 
 def get_products(
@@ -368,53 +390,51 @@ def delete_movement(conn: DBConnection, movement_id: int) -> None:
     """Delete a movement record and adjust stock accordingly. Owner only."""
     placeholder = "%s" if is_postgres(conn) else "?"
     cursor = conn.cursor()
-    
-    # First, get the movement details to reverse the stock change
-    cursor.execute(
-        f"SELECT product_name, movement_type, quantity FROM movements WHERE id={placeholder}",
-        (movement_id,),
-    )
-    row = cursor.fetchone()
-    if row:
-        product_name, movement_type, quantity = row
-        
-        # Reverse the stock adjustment:
-        # PURCHASE/RECEIVED added stock, so subtract it back
-        # SALE/ISSUED subtracted stock, so add it back
-        # ADJUSTMENT could be +/-, reverse the sign
-        if movement_type in ["PURCHASE", "RECEIVED"]:
-            stock_adjustment = -quantity  # Subtract what was added
-        elif movement_type in ["SALE", "ISSUED"]:
-            stock_adjustment = quantity  # Add back what was subtracted
-        else:  # ADJUSTMENT
-            stock_adjustment = -quantity  # Reverse the adjustment
-        
-        # Update product stock
+
+    try:
+        # First, get the movement details to reverse the stock change
+        cursor.execute(
+            f"SELECT product_name, movement_type, quantity FROM movements WHERE id={placeholder}",
+            (movement_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            product_name, movement_type, quantity = row
+
+            # Reverse the stock adjustment:
+            # PURCHASE/RECEIVED added stock, so subtract it back
+            # SALE/ISSUED subtracted stock, so add it back
+            # ADJUSTMENT could be +/-, reverse the sign
+            if movement_type in ["PURCHASE", "RECEIVED"]:
+                stock_adjustment = -quantity  # Subtract what was added
+            elif movement_type in ["SALE", "ISSUED"]:
+                stock_adjustment = quantity  # Add back what was subtracted
+            else:  # ADJUSTMENT
+                stock_adjustment = -quantity  # Reverse the adjustment
+
+            # Update product stock
             cursor.execute(
                 f"UPDATE products SET current_stock = current_stock + {placeholder} WHERE name = {placeholder}",
                 (stock_adjustment, product_name),
             )
-    
-    # Delete the movement
-    cursor.execute(
-        f"DELETE FROM movements WHERE id={placeholder}",
-        (movement_id,),
-    )
-    conn.commit()
 
-
-def backup_database(
-    src: str = "data/bimpos_inventory.db",
-    dest_dir: str = "backups",
-) -> str:
-    """Create a timestamped backup copy of the database."""
-    os.makedirs(dest_dir, exist_ok=True)
-    timestamp_str = datetime.now(LEBANON_TZ).strftime("%Y%m%d_%H%M%S")
-    dest = os.path.join(dest_dir, f"backup_{timestamp_str}.db")
-    if not os.path.exists(src):
-        return f"Source database not found: {src}"
-    shutil.copyfile(src, dest)
-    return f"Backup created: {dest}"
+        # Delete the movement
+        cursor.execute(
+            f"DELETE FROM movements WHERE id={placeholder}",
+            (movement_id,),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        # Invalidate products + movements cache
+        st.session_state["products_cache_version"] = st.session_state.get(
+            "products_cache_version", 0
+        ) + 1
+        st.session_state["movements_cache_version"] = st.session_state.get(
+            "movements_cache_version", 0
+        ) + 1
 
 
 # ============================================================================

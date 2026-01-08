@@ -2,7 +2,6 @@
 import streamlit as st
 import base64
 from core.simple_auth import logout, get_current_user
-from core.services import backup_database
 
 
 def render_sidebar_menu():
@@ -73,12 +72,3 @@ def render_sidebar_menu():
     return selected
 
 
-def render_backup():
-    """Render database backup button in sidebar for admin users."""
-    if not st.session_state.admin_mode:
-        return
-    st.sidebar.markdown("---")
-    if st.sidebar.button("📥 Backup Database", use_container_width=True):
-        msg = backup_database()
-        st.sidebar.success(msg)
-        st.toast("💾 Backup completed", icon="💽")

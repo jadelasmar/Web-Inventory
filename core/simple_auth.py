@@ -1,4 +1,5 @@
 """Simple authentication module without external dependencies."""
+import logging
 import streamlit as st
 import hashlib
 import json
@@ -9,6 +10,8 @@ from zoneinfo import ZoneInfo
 LEBANON_TZ = ZoneInfo("Asia/Beirut")
 SESSION_FILE = ".streamlit/user_session.json"
 SESSION_DURATION_DAYS = 30  # Stay logged in for 30 days
+
+logger = logging.getLogger(__name__)
 
 
 def hash_password(password: str) -> str:
@@ -63,11 +66,6 @@ def clear_session():
         pass
 
 
-def hash_password(password: str) -> str:
-    """Hash password using SHA-256."""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-
 def get_bootstrap_users():
     """Get bootstrap owner from secrets.toml (used for initial access)."""
     try:
@@ -99,7 +97,7 @@ def get_db_user(conn, username: str):
                 'status': row[4]
             }
     except Exception:
-        pass
+        logger.exception("Failed to read user from database")
     return None
 
 

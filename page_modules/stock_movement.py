@@ -79,10 +79,10 @@ def render(conn):
     except ValueError:
         valid_qty = False
 
-    # Client-side validation: if this is a SALE, ensure quantity does not
+    # Client-side validation: if this is a SALE/ISSUED, ensure quantity does not
     # exceed available stock and surface a helpful message.
     insufficient_stock = False
-    if valid_qty and mtype == "SALE":
+    if valid_qty and mtype in ("SALE", "ISSUED"):
         try:
             available = int(row.get("current_stock") or 0)
         except Exception:
@@ -93,13 +93,13 @@ def render(conn):
     # Other fields persisted per product
 
     price_key = f"move_price_{selected_product}"
-    price_disabled = mtype in ("ADJUSTMENT", "REPLACEMENT")
+    price_disabled = mtype == "ADJUSTMENT"
     if price_key not in st.session_state or price_disabled:
         st.session_state[price_key] = 0.0 if not price_disabled else 0.0
     price = st.number_input(
         "Price", min_value=0.0, key=price_key, disabled=price_disabled
     )
-    # For ADJUSTMENT/REPLACEMENT, treat price as 'NA' in movement log
+    # For ADJUSTMENT, treat price as 'NA' in movement log
     price_to_log = price if not price_disabled else "N/A"
 
     # Supplier/Customer with dropdown of existing suppliers

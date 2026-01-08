@@ -1,7 +1,6 @@
 # ---------- constants.py ----------
 """Project-wide constants and configuration helpers."""
 from typing import List
-import os
 
 POS_CATEGORIES: List[str] = [
     "POS System",

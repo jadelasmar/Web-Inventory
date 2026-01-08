@@ -1,10 +1,10 @@
 """Add/Edit product page."""
 import streamlit as st
 import sqlite3
+import psycopg2
 from core.constants import POS_CATEGORIES
 from core.services import get_products, add_product, update_product, delete_product, restore_product
 from core.simple_auth import get_current_user
-import os
 from pathlib import Path
 
 
@@ -254,7 +254,7 @@ def render(conn):
                         "",  # Empty supplier - will be filled when recording movements
                     ),
                 )
-            except sqlite3.IntegrityError:
+            except (sqlite3.IntegrityError, psycopg2.IntegrityError):
                 st.toast(f"❌ Product '{name}' already exists.", icon="⚠️")
             except Exception as e:
                 st.toast(f"❌ Could not add product: {e}", icon="⚠️")

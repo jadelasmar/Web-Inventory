@@ -1,9 +1,16 @@
 """BIM POS Inventory - Main Application Entry Point."""
+import logging
 import streamlit as st
 from core.db_init import init_db
 from core.simple_auth import login_form, require_auth, get_current_user
 from core.mobile_styles import apply_mobile_styles
-from ui.sidebar import render_sidebar_menu, render_backup
+from ui.sidebar import render_sidebar_menu
+
+# Basic logging for Streamlit Cloud logs
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+)
 
 # Import page render functions
 from page_modules import dashboard, inventory, add_product, stock_movement, alerts, movements, user_management
@@ -43,9 +50,8 @@ if "menu_selection" not in st.session_state:
 if "input_values" not in st.session_state:
     st.session_state.input_values = {}
 
-# Render sidebar menu and backup button
+# Render sidebar menu
 menu = render_sidebar_menu()
-render_backup()
 
 # Page routing
 pages = {
