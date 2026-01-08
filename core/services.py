@@ -390,10 +390,10 @@ def delete_movement(conn: DBConnection, movement_id: int) -> None:
             stock_adjustment = -quantity  # Reverse the adjustment
         
         # Update product stock
-        cursor.execute(
-            f"UPDATE products SET stock = stock + {placeholder} WHERE name = {placeholder}",
-            (stock_adjustment, product_name),
-        )
+            cursor.execute(
+                f"UPDATE products SET current_stock = current_stock + {placeholder} WHERE name = {placeholder}",
+                (stock_adjustment, product_name),
+            )
     
     # Delete the movement
     cursor.execute(
