@@ -58,6 +58,7 @@ def render(conn):
         if st.session_state.get("edit_selected_prev") != selected:
             product = df[df["name"] == selected].iloc[0]
             st.session_state["edit_selected_prev"] = selected
+            st.session_state["edit_name"] = product["name"]
             st.session_state["edit_category"] = product["category"]
             st.session_state["edit_supplier"] = product["supplier"]
             st.session_state["edit_cost"] = float(product["cost_price"])
@@ -65,6 +66,7 @@ def render(conn):
             st.session_state["edit_desc"] = product["description"]
             st.session_state["edit_image"] = product["image_url"]
 
+        edit_name = st.text_input("Product Name *", key="edit_name")
         # Category input with suggestions from existing products
         existing_categories = (
             sorted(set(df["category"].dropna().unique()), key=str.casefold)
@@ -143,10 +145,12 @@ def render(conn):
         
         col1, col2 = st.columns([3, 1])
         with col1:
-            if st.button("💾 Update Product", use_container_width=True):
+            update_btn_disabled = not edit_name
+            if st.button("💾 Update Product", use_container_width=True, disabled=update_btn_disabled):
                 update_product(
                     conn,
                     (
+                        edit_name,
                         category,
                         desc,
                         image,
@@ -156,8 +160,9 @@ def render(conn):
                         selected,
                     ),
                 )
-                msg = f"✅ Product '{selected}' updated"
+                msg = f"✅ Product '{edit_name or selected}' updated"
                 st.toast(msg, icon="💾")
+                st.rerun()
         
         # Owner-only: Delete/Restore product
         with col2:

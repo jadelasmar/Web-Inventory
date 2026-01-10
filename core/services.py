@@ -162,23 +162,62 @@ def add_product(conn: DBConnection, data: tuple) -> None:
 
 
 def update_product(conn: DBConnection, data: tuple) -> None:
-    """Update product information (by name)."""
+    """Update product information (allows renaming by name)."""
     placeholder = "%s" if is_postgres(conn) else "?"
     cur = conn.cursor()
-    cur.execute(
-        f"""
-        UPDATE products SET category={placeholder}, description={placeholder}, 
-                          image_url={placeholder}, cost_price={placeholder}, 
-                          sale_price={placeholder}, supplier={placeholder} 
-        WHERE name={placeholder}
-        """,
-        data,
-    )
-    conn.commit()
-    # Invalidate products cache
-    st.session_state["products_cache_version"] = st.session_state.get(
-        "products_cache_version", 0
-    ) + 1
+    try:
+        (
+            new_name,
+            category,
+            description,
+            image_url,
+            cost_price,
+            sale_price,
+            supplier,
+            old_name,
+        ) = data
+        if new_name and new_name.lower() != old_name.lower():
+            cur.execute(
+                f"SELECT name FROM products WHERE LOWER(name) = {placeholder}",
+                (new_name.lower(),),
+            )
+            if cur.fetchone():
+                error_class = psycopg2.IntegrityError if is_postgres(conn) else sqlite3.IntegrityError
+                raise error_class("Duplicate product name (case-insensitive)")
+
+        cur.execute(
+            f"""
+            UPDATE products SET name={placeholder}, category={placeholder},
+                              description={placeholder}, image_url={placeholder},
+                              cost_price={placeholder}, sale_price={placeholder},
+                              supplier={placeholder}
+            WHERE name={placeholder}
+            """,
+            (
+                new_name,
+                category,
+                description,
+                image_url,
+                cost_price,
+                sale_price,
+                supplier,
+                old_name,
+            ),
+        )
+        if new_name and new_name != old_name:
+            cur.execute(
+                f"UPDATE movements SET product_name={placeholder} WHERE product_name={placeholder}",
+                (new_name, old_name),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        # Invalidate products cache
+        st.session_state["products_cache_version"] = st.session_state.get(
+            "products_cache_version", 0
+        ) + 1
 
 
 def delete_product(conn: DBConnection, name: str) -> None:
