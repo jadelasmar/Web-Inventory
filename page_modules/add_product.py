@@ -33,6 +33,13 @@ def render(conn):
 
     # ---------- Edit Existing Product (persistent fields) ----------
     if mode == "📝 Edit Existing Product" and not df.empty:
+        # Show update toast after rerun
+        if st.session_state.get("product_updated_success"):
+            updated_name = st.session_state.get("product_updated_name", "Product")
+            st.toast(f"✅ Product '{updated_name}' updated", icon="💾")
+            del st.session_state["product_updated_success"]
+            del st.session_state["product_updated_name"]
+
         # Add indicator for inactive products (Owner only)
         user = get_current_user()
         product_names_original = df["name"].tolist()
@@ -147,22 +154,31 @@ def render(conn):
         with col1:
             update_btn_disabled = not edit_name
             if st.button("💾 Update Product", use_container_width=True, disabled=update_btn_disabled):
-                update_product(
-                    conn,
-                    (
-                        edit_name,
-                        category,
-                        desc,
-                        image,
-                        float(cost),
-                        float(sale),
-                        supplier,
-                        selected,
-                    ),
-                )
-                msg = f"✅ Product '{edit_name or selected}' updated"
-                st.toast(msg, icon="💾")
-                st.rerun()
+                try:
+                    update_product(
+                        conn,
+                        (
+                            edit_name,
+                            category,
+                            desc,
+                            image,
+                            float(cost),
+                            float(sale),
+                            supplier,
+                            selected,
+                        ),
+                    )
+                except (sqlite3.IntegrityError, psycopg2.IntegrityError):
+                    st.toast(
+                        f"❌ Product '{edit_name or selected}' already exists.",
+                        icon="⚠️",
+                    )
+                except Exception as e:
+                    st.toast(f"❌ Could not update product: {e}", icon="⚠️")
+                else:
+                    st.session_state["product_updated_success"] = True
+                    st.session_state["product_updated_name"] = edit_name or selected
+                    st.rerun()
         
         # Owner-only: Delete/Restore product
         with col2:
