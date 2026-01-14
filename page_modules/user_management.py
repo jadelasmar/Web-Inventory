@@ -20,10 +20,10 @@ def render(conn):
         st.error("⛔ Access denied. This page is for admins and owners only.")
         return
     
-    st.title("👥 User Management")
+    st.title("🧑‍💻 User Management")
     
     # Pending approvals section
-    st.header("📋 Pending Approvals")
+    st.header("🕒 Pending Approvals")
     pending_df = get_pending_users(conn)
     
     if pending_df.empty:
@@ -61,7 +61,7 @@ def render(conn):
                 st.divider()
     
     # Active users section
-    st.header("👤 Active Users")
+    st.header("👥 Active Users")
     all_users_df = get_all_users(conn)
     active_users = all_users_df[all_users_df['status'] == 'approved']
     
@@ -73,7 +73,7 @@ def render(conn):
                 col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
                 
                 with col1:
-                    role_emoji = "👑" if row['role'] == 'owner' else "🔑" if row['role'] == 'admin' else "👁️"
+                    role_emoji = "👑" if row['role'] == "owner" else "🔑" if row['role'] == "admin" else "👁️"
                     st.write(f"{role_emoji} **{row['name']}**")
                     st.caption(f"@{row['username']}")
                 

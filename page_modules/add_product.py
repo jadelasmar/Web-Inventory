@@ -64,7 +64,7 @@ def render(conn):
     if not st.session_state.admin_mode:
         st.warning("🔒 Admin only")
         return
-    st.header("➕ Add / Edit Product")
+    st.header("🧰 Add / Edit Product")
     df = get_products(conn)
 
     # Sort products alphabetically for predictability (case-insensitive)
@@ -75,7 +75,7 @@ def render(conn):
     mode = st.radio(
         "Choose option",
         [
-            "➕ Create New Product",
+            "🧾 Create New Product",
             "📝 Edit Existing Product",
         ],
         horizontal=True,
@@ -290,7 +290,7 @@ def render(conn):
         # Check if we just added a product successfully
         if st.session_state.get("product_added_success"):
             product_name = st.session_state.get("product_added_name", "Product")
-            st.toast(f"✅ Product '{product_name}' added", icon="➕")
+            st.toast(f"✅ Product '{product_name}' added", icon="✅")
             del st.session_state["product_added_success"]
             del st.session_state["product_added_name"]
 
@@ -374,7 +374,7 @@ def render(conn):
                 image = local_image
         # Disable add button if required fields are missing
         add_btn_disabled = not name or cost is None or sale is None or stock is None
-        if st.button("➕ Add Product", disabled=add_btn_disabled):
+        if st.button("✅ Add Product", disabled=add_btn_disabled):
             try:
                 add_product(
                     conn,

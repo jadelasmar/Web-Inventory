@@ -42,12 +42,12 @@ def render_sidebar_menu():
     st.sidebar.divider()
     
     # Navigation menu
-    menu = ["📊 Dashboard", "📋 View Inventory", "⚠️ Stock Alerts", "🔄 Movement Log"]
+    menu = ["📈 Dashboard", "🗂️ View Inventory", "🚨 Stock Alerts", "🔁 Movement Log"]
     if st.session_state.admin_mode:
         # Only show admin pages if admin_mode is enabled
         menu.insert(1, "➕ Add Product")
         menu.insert(2, "📦 Stock Movement")
-        menu.append("👥 User Management")
+        menu.append("🧑‍💻 User Management")
     if (
         "menu_selection" not in st.session_state
         or st.session_state.menu_selection not in menu
@@ -59,7 +59,7 @@ def render_sidebar_menu():
     
     # Show current user info
     user = get_current_user()
-    st.sidebar.markdown(f"👤 **{user['name']}**")
+    st.sidebar.markdown(f"🪪 **{user['name']}**")
     st.sidebar.caption(f"Role: {user['role'].title()}")
     
     # Logout button

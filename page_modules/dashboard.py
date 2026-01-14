@@ -7,7 +7,7 @@ from core.services import get_products, get_movements
 
 def render(conn):
     """Render the dashboard page."""
-    st.header("📊 Inventory Overview")
+    st.header("📈 Inventory Overview")
     df = get_products(conn)
     if df.empty:
         st.info("No products available")

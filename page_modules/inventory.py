@@ -6,7 +6,7 @@ from ui.components import maybe_open_image_modal, render_products_table
 
 def render(conn):
     """Render the inventory page."""
-    st.header("📋 Inventory")
+    st.header("🗂️ Inventory")
     df = get_products(conn)
     search = st.text_input("Search by name, category, brand, description, or supplier")
     if not df.empty:

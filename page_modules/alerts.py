@@ -6,7 +6,7 @@ from core.services import get_products
 
 def render(conn):
     """Render the stock alerts page."""
-    st.header("⚠️ Low Stock Alerts")
+    st.header("🚨 Low Stock Alerts")
     threshold = st.slider("Threshold", 0, 20, LOW_STOCK_THRESHOLD_DEFAULT)
     df = get_products(conn)
     low = df[df["current_stock"] <= threshold]

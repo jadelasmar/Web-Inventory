@@ -7,7 +7,7 @@ from core.simple_auth import get_current_user
 
 def render(conn):
     """Render the movement log page."""
-    st.header("🔄 Movement Log")
+    st.header("🔁 Movement Log")
     days = st.selectbox("Last", [1, 7, 30, 90, "All"])
     types = st.multiselect("Type", MOVEMENT_TYPES, default=MOVEMENT_TYPES)
     days_val = None if days == "All" else days

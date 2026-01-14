@@ -46,7 +46,7 @@ if "admin_mode" not in st.session_state:
 if "show_admin_login" not in st.session_state:
     st.session_state.show_admin_login = False
 if "menu_selection" not in st.session_state:
-    st.session_state.menu_selection = "📊 Dashboard"
+    st.session_state.menu_selection = "📈 Dashboard"
 if "input_values" not in st.session_state:
     st.session_state.input_values = {}
 
@@ -55,19 +55,19 @@ menu = render_sidebar_menu()
 
 # Page routing
 pages = {
-    "📊 Dashboard": lambda: dashboard.render(conn),
-    "📋 View Inventory": lambda: inventory.render(conn),
-    "⚠️ Stock Alerts": lambda: alerts.render(conn),
-    "🔄 Movement Log": lambda: movements.render(conn),
+    "📈 Dashboard": lambda: dashboard.render(conn),
+    "🗂️ View Inventory": lambda: inventory.render(conn),
+    "🚨 Stock Alerts": lambda: alerts.render(conn),
+    "🔁 Movement Log": lambda: movements.render(conn),
 }
 
 # Add admin-only pages
 if st.session_state.admin_mode:
     pages["➕ Add Product"] = lambda: add_product.render(conn)
     pages["📦 Stock Movement"] = lambda: stock_movement.render(conn)
-    pages["👥 User Management"] = lambda: user_management.render(conn)
+    pages["🧑‍💻 User Management"] = lambda: user_management.render(conn)
 
 # Render selected page
 if menu not in pages:
-    menu = "📊 Dashboard"
+    menu = "📈 Dashboard"
 pages[menu]()
