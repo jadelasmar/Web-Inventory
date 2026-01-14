@@ -411,9 +411,10 @@ def get_products(
             logger.error(f"Error fetching products: {e}")
             return pd.DataFrame()
     
-    # Use a cache key that changes when data might have changed
-    # This allows caching while still refreshing when needed
-    cache_key = f"products_{include_inactive}_{datetime.now().timestamp()}"
+    # Use a cache key tied to the explicit cache version so results are reused
+    # until data-changing operations increment the version.
+    cache_version = st.session_state.get("products_cache_version", 0)
+    cache_key = f"products_{include_inactive}_{cache_version}"
     return _fetch_products(cache_key, include_inactive)
 
 
@@ -429,23 +430,27 @@ def get_movements(
     @st.cache_data(ttl=10)
     def _fetch_movements(cache_key: str, days: Optional[int] = None, types_tuple: Optional[tuple] = None):
         query = "SELECT * FROM movements WHERE 1=1"
+        params = []
         if days:
             if is_postgres(conn):
                 query += f" AND movement_date >= CURRENT_DATE - INTERVAL '{int(days)} days'"
             else:
                 query += f" AND movement_date >= date('now','-{int(days)} days')"
         if types_tuple:
-            type_str = ",".join(f"'{t}'" for t in types_tuple)
-            query += " AND movement_type IN (" + type_str + ")"
+            placeholder = "%s" if is_postgres(conn) else "?"
+            placeholders = ",".join([placeholder] * len(types_tuple))
+            query += f" AND movement_type IN ({placeholders})"
+            params.extend(types_tuple)
         try:
-            return pd.read_sql(query, conn)
+            return pd.read_sql(query, conn, params=params or None)
         except Exception as e:
             logger.exception("Failed to read movements: %s", e)
             return pd.DataFrame()
     
     # Convert types to tuple for hashability in cache
     types_tuple = tuple(types) if types else None
-    cache_key = f"movements_{days}_{types_tuple}_{datetime.now().timestamp()}"
+    cache_version = st.session_state.get("movements_cache_version", 0)
+    cache_key = f"movements_{days}_{types_tuple}_{cache_version}"
     return _fetch_movements(cache_key, days, types_tuple)
 
 
