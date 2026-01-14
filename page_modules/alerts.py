@@ -12,9 +12,9 @@ def render(conn):
     low = df[df["current_stock"] <= threshold]
     if not low.empty:
         low = low.sort_values("name", key=lambda s: s.str.casefold())
-    # Show only Name, Category, Stock, Supplier for stock alerts
+    # Show only Name, Category, Brand, Stock, Supplier for stock alerts
     if not low.empty:
-        table_cols = ["name", "category", "current_stock", "cost_price", "supplier"]
+        table_cols = ["name", "category", "brand", "current_stock", "cost_price", "supplier"]
         display_df = low.copy()
         for c in table_cols:
             if c not in display_df.columns:
@@ -24,6 +24,7 @@ def render(conn):
             columns={
                 "name": "Name",
                 "category": "Category",
+                "brand": "Brand",
                 "current_stock": "Stock",
                 "cost_price": "Cost",
                 "supplier": "Supplier",

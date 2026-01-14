@@ -41,6 +41,7 @@ def render_products_table(df, conn):
     table_cols = [
         "name",
         "category",
+        "brand",
         "current_stock",
         "cost_price",
         "sale_price",
@@ -62,6 +63,7 @@ def render_products_table(df, conn):
         columns={
             "name": "Name",
             "category": "Category",
+            "brand": "Brand",
             "current_stock": "Stock",
             "cost_price": "Cost",
             "sale_price": "Price",

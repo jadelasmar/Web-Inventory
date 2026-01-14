@@ -67,6 +67,7 @@ def render(conn):
             st.session_state["edit_selected_prev"] = selected
             st.session_state["edit_name"] = product["name"]
             st.session_state["edit_category"] = product["category"]
+            st.session_state["edit_brand"] = product.get("brand", "")
             st.session_state["edit_supplier"] = product["supplier"]
             st.session_state["edit_cost"] = float(product["cost_price"])
             st.session_state["edit_sale"] = float(product["sale_price"])
@@ -103,6 +104,36 @@ def render(conn):
                 st.write("Suggestions:")
                 st.write(", ".join(category_suggestions))
         category = category_match if category_match else (category_input.title() if category_input else "")
+
+        # Brand input with live suggestions and deduplication
+        existing_brands = (
+            sorted(set(df["brand"].dropna().unique()), key=str.casefold)
+            if not df.empty and "brand" in df.columns
+            else []
+        )
+        brand_input = st.text_input("Brand", key="edit_brand")
+        brand_match = next(
+            (
+                b
+                for b in existing_brands
+                if b.lower() == (brand_input or "").lower()
+            ),
+            None,
+        )
+        brand_suggestions = [
+            b
+            for b in existing_brands
+            if brand_input and brand_input.lower() in b.lower()
+        ]
+        if brand_input:
+            if brand_match:
+                st.info(f"Will use existing brand: {brand_match}")
+            else:
+                st.info("This will be a new brand.")
+            if brand_suggestions and not brand_match:
+                st.write("Suggestions:")
+                st.write(", ".join(brand_suggestions))
+        brand = brand_match if brand_match else brand_input
         
         # Supplier input with live suggestions and deduplication (same as Create mode)
         existing_suppliers = (
@@ -160,6 +191,7 @@ def render(conn):
                         (
                             edit_name,
                             category,
+                            brand,
                             desc,
                             image,
                             float(cost),
@@ -237,6 +269,36 @@ def render(conn):
                 st.write("Suggestions:")
                 st.write(", ".join(category_suggestions))
         category = category_match if category_match else (category_input.title() if category_input else "")
+
+        # Brand input with live suggestions and deduplication
+        existing_brands = (
+            sorted(set(df["brand"].dropna().unique()), key=str.casefold)
+            if not df.empty and "brand" in df.columns
+            else []
+        )
+        brand_input = st.text_input("Brand", key="add_brand")
+        brand_match = next(
+            (
+                b
+                for b in existing_brands
+                if b.lower() == (brand_input or "").lower()
+            ),
+            None,
+        )
+        brand_suggestions = [
+            b
+            for b in existing_brands
+            if brand_input and brand_input.lower() in b.lower()
+        ]
+        if brand_input:
+            if brand_match:
+                st.info(f"Will use existing brand: {brand_match}")
+            else:
+                st.info("This will be a new brand.")
+            if brand_suggestions and not brand_match:
+                st.write("Suggestions:")
+                st.write(", ".join(brand_suggestions))
+        brand = brand_match if brand_match else brand_input
         
         # Add stock input for new product
         stock = st.number_input("Stock", min_value=0, key="add_stock")
@@ -267,6 +329,7 @@ def render(conn):
                     (
                         name,
                         category,
+                        brand,
                         desc,
                         image,
                         int(stock),
@@ -287,6 +350,7 @@ def render(conn):
                 for k in [
                     "add_name",
                     "add_category",
+                    "add_brand",
                     "add_cost",
                     "add_sale",
                     "add_stock",

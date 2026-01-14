@@ -48,6 +48,7 @@ def init_db(conn: DBConnection) -> None:
             id {id_type},
             name TEXT UNIQUE NOT NULL,
             category TEXT,
+            brand TEXT,
             description TEXT,
             image_url TEXT,
             current_stock INTEGER DEFAULT 0,
@@ -129,6 +130,27 @@ def init_db(conn: DBConnection) -> None:
                 )
     except Exception:
         pass
+
+    # Schema migrations: ensure `brand` exists
+    try:
+        if is_pg:
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='products' AND column_name='brand'
+            """)
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE products ADD COLUMN brand TEXT"
+                )
+        else:
+            cur.execute("PRAGMA table_info(products)")
+            cols = [r[1] for r in cur.fetchall()]
+            if "brand" not in cols:
+                cur.execute(
+                    "ALTER TABLE products ADD COLUMN brand TEXT"
+                )
+    except Exception:
+        pass
     
     conn.commit()
 
@@ -151,7 +173,7 @@ def add_product(conn: DBConnection, data: tuple) -> None:
     placeholders = ", ".join([placeholder] * len(data))
     cur.execute(
         f"""
-        INSERT INTO products (name, category, description, 
+        INSERT INTO products (name, category, brand, description, 
                             image_url, current_stock, 
                             cost_price, sale_price, supplier) 
         VALUES ({placeholders})
@@ -169,6 +191,7 @@ def update_product(conn: DBConnection, data: tuple) -> None:
         (
             new_name,
             category,
+            brand,
             description,
             image_url,
             cost_price,
@@ -188,7 +211,7 @@ def update_product(conn: DBConnection, data: tuple) -> None:
         cur.execute(
             f"""
             UPDATE products SET name={placeholder}, category={placeholder},
-                              description={placeholder}, image_url={placeholder},
+                              brand={placeholder}, description={placeholder}, image_url={placeholder},
                               cost_price={placeholder}, sale_price={placeholder},
                               supplier={placeholder}
             WHERE name={placeholder}
@@ -196,6 +219,7 @@ def update_product(conn: DBConnection, data: tuple) -> None:
             (
                 new_name,
                 category,
+                brand,
                 description,
                 image_url,
                 cost_price,
