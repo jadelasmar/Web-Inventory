@@ -64,7 +64,7 @@ def render(conn):
     if not st.session_state.admin_mode:
         st.warning("🔒 Admin only")
         return
-    st.header("🧰 Add / Edit Product")
+    st.header("➕ Add / Edit Product")
     df = get_products(conn)
 
     # Sort products alphabetically for predictability (case-insensitive)
