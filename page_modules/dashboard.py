@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from core.services import get_products, get_movements
+from core.services import get_products, get_movements, get_latest_purchase_parties
 
 
 def render(conn):
@@ -42,12 +42,16 @@ def render(conn):
         col2.metric("Avg Profit Margin", "N/A")
 
     # Total parties (from products + movements)
-    parties_from_products = set(df["supplier"].dropna().unique())
+    parties_from_products = {
+        p for p in get_latest_purchase_parties(conn).values() if str(p).strip()
+    }
     movements_df = get_movements(conn, days=None, types=None)
     if not movements_df.empty and "supplier_customer" in movements_df.columns:
-        parties_from_movements = set(
-            movements_df["supplier_customer"].dropna().unique()
-        )
+        parties_from_movements = {
+            p
+            for p in movements_df["supplier_customer"].dropna().unique()
+            if str(p).strip()
+        }
         total_parties = parties_from_products | parties_from_movements
     else:
         total_parties = parties_from_products

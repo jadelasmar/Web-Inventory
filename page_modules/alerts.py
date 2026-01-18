@@ -1,7 +1,7 @@
 """Stock alerts page for low inventory warnings."""
 import streamlit as st
 from core.constants import LOW_STOCK_THRESHOLD_DEFAULT
-from core.services import get_products, get_movements
+from core.services import get_products, get_latest_purchase_parties
 
 
 def render(conn):
@@ -9,18 +9,7 @@ def render(conn):
     st.header("🚨 Low Stock Alerts")
     threshold = st.slider("Threshold", 0, 20, LOW_STOCK_THRESHOLD_DEFAULT)
     df = get_products(conn)
-    movements_df = get_movements(conn, days=None, types=["PURCHASE"])
-    party_map = {}
-    if not movements_df.empty and "product_name" in movements_df.columns:
-        sort_cols = ["movement_date"]
-        if "id" in movements_df.columns:
-            sort_cols.append("id")
-        latest = movements_df.sort_values(sort_cols).drop_duplicates(
-            "product_name", keep="last"
-        )
-        party_map = (
-            latest.set_index("product_name")["supplier_customer"].dropna().to_dict()
-        )
+    party_map = get_latest_purchase_parties(conn)
     if not df.empty:
         df = df.copy()
         df["party"] = df["name"].map(party_map).fillna("")

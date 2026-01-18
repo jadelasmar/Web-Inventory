@@ -13,6 +13,7 @@ from core.services import (
     set_product_stock,
     find_product_by_name,
     record_movement,
+    backfill_initial_stock_movements,
 )
 from core.simple_auth import get_current_user
 from pathlib import Path
@@ -85,6 +86,12 @@ def render(conn):
         del st.session_state["product_restored_success"]
         del st.session_state["product_restored_name"]
     st.header("➕ Add / Edit Product")
+    if st.button("🧾 Backfill Initial Stock Movements"):
+        created = backfill_initial_stock_movements(conn)
+        if created:
+            st.toast(f"Created {created} initial stock movements", icon="📦")
+        else:
+            st.toast("No products needed backfill", icon="✅")
     df = get_products(conn)
 
     # Sort products alphabetically for predictability (case-insensitive)
