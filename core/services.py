@@ -384,6 +384,11 @@ def record_movement(conn: DBConnection, data: tuple) -> None:
             f"UPDATE products SET current_stock={placeholder} WHERE name={placeholder}",
             (new_stock, product_name),
         )
+        if movement_type == "PURCHASE" and supplier_customer:
+            cur.execute(
+                f"UPDATE products SET supplier={placeholder} WHERE name={placeholder}",
+                (supplier_customer, product_name),
+            )
 
         placeholders_list = ", ".join([placeholder] * 8)
         cur.execute(
