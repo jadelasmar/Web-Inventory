@@ -239,7 +239,13 @@ def render(conn):
         col1, col2 = st.columns([3, 1])
         with col1:
             update_btn_disabled = not edit_name
-            if st.button("💾 Update Product", use_container_width=True, disabled=update_btn_disabled):
+            update_busy = st.session_state.get("update_product_busy", False)
+            if st.button(
+                "💾 Update Product",
+                use_container_width=True,
+                disabled=update_btn_disabled or update_busy,
+            ):
+                st.session_state["update_product_busy"] = True
                 try:
                     update_product(
                         conn,
@@ -265,7 +271,22 @@ def render(conn):
                 else:
                     st.session_state["product_updated_success"] = True
                     st.session_state["product_updated_name"] = edit_name or selected
+                    # Reset edit fields to default values on next run
+                    for key in [
+                        "edit_name",
+                        "edit_category",
+                        "edit_brand",
+                        "edit_supplier",
+                        "edit_cost",
+                        "edit_sale",
+                        "edit_desc",
+                        "edit_image",
+                        "edit_selected_prev",
+                    ]:
+                        st.session_state.pop(key, None)
+                    st.session_state["update_product_busy"] = False
                     st.rerun()
+                st.session_state["update_product_busy"] = False
         
         # Owner-only: Delete/Restore product
         with col2:
@@ -374,7 +395,9 @@ def render(conn):
                 image = local_image
         # Disable add button if required fields are missing
         add_btn_disabled = not name or cost is None or sale is None or stock is None
-        if st.button("✅ Add Product", disabled=add_btn_disabled):
+        add_busy = st.session_state.get("add_product_busy", False)
+        if st.button("✅ Add Product", disabled=add_btn_disabled or add_busy):
+            st.session_state["add_product_busy"] = True
             try:
                 add_product(
                     conn,
@@ -410,4 +433,6 @@ def render(conn):
                     "add_image",
                 ]:
                     st.session_state.pop(k, None)
+                st.session_state["add_product_busy"] = False
                 st.rerun()
+            st.session_state["add_product_busy"] = False

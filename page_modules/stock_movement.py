@@ -146,11 +146,13 @@ def render(conn):
             key=date_key,
         )
 
-    btn_disabled = not valid_qty or insufficient_stock
+    move_busy = st.session_state.get("movement_busy", False)
+    btn_disabled = not valid_qty or insufficient_stock or move_busy
     if st.button(
         "📝 Record Movement",
         disabled=btn_disabled,
     ):
+        st.session_state["movement_busy"] = True
         try:
             record_movement(
                 conn,
@@ -177,7 +179,10 @@ def render(conn):
             for key in list(st.session_state.keys()):
                 if key.startswith(f"move_") and selected_product in key:
                     del st.session_state[key]
+            st.session_state.pop("move_selected", None)
+            st.session_state["movement_busy"] = False
             st.rerun()
+        st.session_state["movement_busy"] = False
     # Show client-side error messaging next to the form controls
     if insufficient_stock:
         st.error(f"Insufficient stock: only {row.get('current_stock', 0)} available.")
