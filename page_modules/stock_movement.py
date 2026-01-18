@@ -3,7 +3,7 @@ import streamlit as st
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from core.constants import MOVEMENT_TYPES
-from core.services import get_products, record_movement
+from core.services import get_products, get_movements, record_movement
 
 # Lebanon timezone
 LEBANON_TZ = ZoneInfo("Asia/Beirut")
@@ -14,6 +14,20 @@ def render(conn):
     if not st.session_state.admin_mode:
         st.warning("🔒 Admin only")
         return
+
+    if st.session_state.pop("reset_movement_form", False):
+        last_product = st.session_state.pop("reset_movement_product", None)
+        if last_product:
+            st.session_state[f"move_notes_{last_product}"] = ""
+            st.session_state[f"move_date_{last_product}"] = datetime.now(LEBANON_TZ).date()
+            st.session_state[f"move_price_{last_product}"] = 0.0
+            st.session_state[f"move_party_{last_product}"] = ""
+            st.session_state.pop(f"move_party_{last_product}_choice", None)
+            st.session_state[f"move_type_{last_product}"] = "PURCHASE"
+            st.session_state.pop(f"_prev_move_type_{last_product}", None)
+            st.session_state[f"qty_{last_product}"] = ""
+            st.session_state.pop(f"clear_qty_{last_product}", None)
+        st.session_state.pop("move_selected", None)
     
     # Check if movement was just recorded and show toast
     if st.session_state.get("movement_recorded_success"):
@@ -21,6 +35,7 @@ def render(conn):
         st.toast(movement_msg, icon="📦")
         del st.session_state["movement_recorded_success"]
         del st.session_state["movement_recorded_msg"]
+        st.session_state.pop("movement_busy", None)
     
     st.header("📦 Record Stock Movement")
     df = get_products(conn)
@@ -102,31 +117,55 @@ def render(conn):
     # For ADJUSTMENT, treat price as 'NA' in movement log
     price_to_log = price if not price_disabled else "N/A"
 
-    # Supplier/Customer with dropdown of existing suppliers
-    existing_suppliers = (
-        sorted(set(df["supplier"].dropna().unique()), key=str.casefold)
+    # Party with dropdown of known parties (from products + movements)
+    parties_from_products = (
+        set(df["supplier"].dropna().unique())
         if not df.empty and "supplier" in df.columns
-        else []
+        else set()
+    )
+    movements_df = get_movements(conn, days=None, types=None)
+    parties_from_movements = (
+        set(movements_df["supplier_customer"].dropna().unique())
+        if not movements_df.empty and "supplier_customer" in movements_df.columns
+        else set()
+    )
+    existing_parties = sorted(
+        {p for p in (parties_from_products | parties_from_movements) if str(p).strip()},
+        key=str.casefold,
     )
     party_key = f"move_party_{selected_product}"
+    last_purchase_party = ""
+    if not movements_df.empty and "product_name" in movements_df.columns:
+        purchase_rows = movements_df[
+            (movements_df["product_name"] == selected_product)
+            & (movements_df["movement_type"] == "PURCHASE")
+        ]
+        if not purchase_rows.empty:
+            sort_cols = ["movement_date"]
+            if "id" in purchase_rows.columns:
+                sort_cols.append("id")
+            last_purchase_party = (
+                purchase_rows.sort_values(sort_cols)
+                .iloc[-1]
+                .get("supplier_customer", "")
+            )
     
-    if existing_suppliers:
-        supplier_options = existing_suppliers + ["Add new..."]
-        # Auto-fill supplier if movement type is PURCHASE
+    if existing_parties:
+        party_options = existing_parties + ["Add new..."]
+        # Auto-fill party if movement type is PURCHASE
         if mtype == "PURCHASE" and not st.session_state.get(f"{party_key}_choice"):
-            default_supplier = row.get("supplier", "")
-            if default_supplier in supplier_options:
-                st.session_state[f"{party_key}_choice"] = default_supplier
+            if last_purchase_party in party_options:
+                st.session_state[f"{party_key}_choice"] = last_purchase_party
         
-        supplier_choice = st.selectbox(
+        party_choice = st.selectbox(
             "Party",
-            supplier_options,
+            party_options,
             key=f"{party_key}_choice",
         )
-        if supplier_choice == "Add new...":
+        if party_choice == "Add new...":
             party = st.text_input("Enter new party", key=party_key)
         else:
-            party = supplier_choice
+            party = party_choice
     else:
         party = st.text_input("Party", key=party_key)
 
@@ -175,11 +214,8 @@ def render(conn):
             msg = f"📦 {mtype} of {qty_val} units for {row['name']} recorded"
             st.session_state["movement_recorded_success"] = True
             st.session_state["movement_recorded_msg"] = msg
-            # Clear all movement fields
-            for key in list(st.session_state.keys()):
-                if key.startswith(f"move_") and selected_product in key:
-                    del st.session_state[key]
-            st.session_state.pop("move_selected", None)
+            st.session_state["reset_movement_form"] = True
+            st.session_state["reset_movement_product"] = selected_product
             st.session_state["movement_busy"] = False
             st.rerun()
         st.session_state["movement_busy"] = False

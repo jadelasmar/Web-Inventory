@@ -1,9 +1,19 @@
 """Add/Edit product page."""
 import streamlit as st
 import sqlite3
+from datetime import datetime
 import psycopg2
 from core.constants import POS_CATEGORIES
-from core.services import get_products, add_product, update_product, delete_product, restore_product
+from core.services import (
+    get_products,
+    add_product,
+    update_product,
+    delete_product,
+    restore_product,
+    set_product_stock,
+    find_product_by_name,
+    record_movement,
+)
 from core.simple_auth import get_current_user
 from pathlib import Path
 
@@ -64,6 +74,16 @@ def render(conn):
     if not st.session_state.admin_mode:
         st.warning("🔒 Admin only")
         return
+    if st.session_state.get("product_deleted_success"):
+        deleted_name = st.session_state.get("product_deleted_name", "Product")
+        st.toast(f"Deleted '{deleted_name}'", icon="🗑️")
+        del st.session_state["product_deleted_success"]
+        del st.session_state["product_deleted_name"]
+    if st.session_state.get("product_restored_success"):
+        restored_name = st.session_state.get("product_restored_name", "Product")
+        st.toast(f"Restored '{restored_name}'", icon="♻️")
+        del st.session_state["product_restored_success"]
+        del st.session_state["product_restored_name"]
     st.header("➕ Add / Edit Product")
     df = get_products(conn)
 
@@ -90,6 +110,7 @@ def render(conn):
             st.toast(f"✅ Product '{updated_name}' updated", icon="💾")
             del st.session_state["product_updated_success"]
             del st.session_state["product_updated_name"]
+            st.session_state.pop("update_product_busy", None)
 
         # Add indicator for inactive products (Owner only)
         user = get_current_user()
@@ -111,15 +132,27 @@ def render(conn):
         # Map display name back to actual product name
         selected_index = product_names_display.index(selected_display)
         selected = product_names_original[selected_index]
+        row = df[df["name"] == selected].iloc[0]
 
-        # When selected product changes, initialize/edit fields from DB
-        if st.session_state.get("edit_selected_prev") != selected:
+        # When selected product changes (or first load), initialize/edit fields from DB
+        edit_missing = any(
+            key not in st.session_state
+            for key in [
+                "edit_name",
+                "edit_category",
+                "edit_brand",
+                "edit_cost",
+                "edit_sale",
+                "edit_desc",
+                "edit_image",
+            ]
+        )
+        if st.session_state.get("edit_selected_prev") != selected or edit_missing:
             product = df[df["name"] == selected].iloc[0]
             st.session_state["edit_selected_prev"] = selected
             st.session_state["edit_name"] = product["name"]
             st.session_state["edit_category"] = product["category"]
             st.session_state["edit_brand"] = product.get("brand", "")
-            st.session_state["edit_supplier"] = product["supplier"]
             st.session_state["edit_cost"] = float(product["cost_price"])
             st.session_state["edit_sale"] = float(product["sale_price"])
             st.session_state["edit_desc"] = product["description"]
@@ -186,35 +219,7 @@ def render(conn):
                 st.write(", ".join(brand_suggestions))
         brand = brand_match if brand_match else brand_input
         
-        # Supplier input with live suggestions and deduplication (same as Create mode)
-        existing_suppliers = (
-            sorted(set(df["supplier"].dropna().unique()), key=str.casefold)
-            if not df.empty and "supplier" in df.columns
-            else []
-        )
-        supplier_input = st.text_input("Supplier", key="edit_supplier")
-        supplier_match = next(
-            (
-                s
-                for s in existing_suppliers
-                if s.lower() == (supplier_input or "").lower()
-            ),
-            None,
-        )
-        supplier_suggestions = [
-            s
-            for s in existing_suppliers
-            if supplier_input and supplier_input.lower() in s.lower()
-        ]
-        if supplier_input:
-            if supplier_match:
-                st.info(f"Will use existing supplier: {supplier_match}")
-            else:
-                st.info("This will be a new supplier.")
-            if supplier_suggestions and not supplier_match:
-                st.write("Suggestions:")
-                st.write(", ".join(supplier_suggestions))
-        supplier = supplier_match if supplier_match else supplier_input
+        supplier = row.get("supplier", "")
         
         # When keys are set in `st.session_state` (above) avoid passing an
         # explicit `value=` to the widget — Streamlit warns if a widget is
@@ -238,7 +243,40 @@ def render(conn):
         
         col1, col2 = st.columns([3, 1])
         with col1:
-            update_btn_disabled = not edit_name
+            def _is_nan(value) -> bool:
+                return isinstance(value, float) and value != value
+
+            def _text_or_empty(value) -> str:
+                if value is None or _is_nan(value):
+                    return ""
+                return str(value)
+
+            def _num_or_zero(value) -> float:
+                if value is None or _is_nan(value):
+                    return 0.0
+                return float(value)
+
+            original_name = _text_or_empty(row.get("name", ""))
+            original_category = _text_or_empty(row.get("category", ""))
+            original_brand = _text_or_empty(row.get("brand", ""))
+            original_desc = _text_or_empty(row.get("description", ""))
+            original_image = _text_or_empty(row.get("image_url", ""))
+            original_cost = _num_or_zero(row.get("cost_price", 0.0))
+            original_sale = _num_or_zero(row.get("sale_price", 0.0))
+
+            edit_dirty = any(
+                [
+                    (edit_name or "").strip() != original_name.strip(),
+                    (category or "").strip() != original_category.strip(),
+                    (brand or "").strip() != original_brand.strip(),
+                    (desc or "").strip() != original_desc.strip(),
+                    (image or "").strip() != original_image.strip(),
+                    float(cost) != original_cost,
+                    float(sale) != original_sale,
+                ]
+            )
+
+            update_btn_disabled = not edit_name or not edit_dirty
             update_busy = st.session_state.get("update_product_busy", False)
             if st.button(
                 "💾 Update Product",
@@ -276,7 +314,6 @@ def render(conn):
                         "edit_name",
                         "edit_category",
                         "edit_brand",
-                        "edit_supplier",
                         "edit_cost",
                         "edit_sale",
                         "edit_desc",
@@ -298,24 +335,53 @@ def render(conn):
                 if is_active:
                     if st.button("🗑️ Delete", use_container_width=True):
                         delete_product(conn, selected)
-                        st.success(f"Deleted '{selected}'")
+                        st.session_state["product_deleted_success"] = True
+                        st.session_state["product_deleted_name"] = selected
                         st.rerun()
                 else:
                     if st.button("♻️ Restore", use_container_width=True):
                         restore_product(conn, selected)
-                        st.success(f"Restored '{selected}'")
+                        st.session_state["product_restored_success"] = True
+                        st.session_state["product_restored_name"] = selected
                         st.rerun()
 
     # ---------- Create New Product (persistent fields) ----------
     else:
+        if st.session_state.pop("reset_add_form", False):
+            st.session_state["add_name"] = ""
+            st.session_state["add_category"] = ""
+            st.session_state["add_brand"] = ""
+            st.session_state["add_cost"] = 0.0
+            st.session_state["add_sale"] = 0.0
+            st.session_state["add_stock"] = 0
+            st.session_state["add_desc"] = ""
+            st.session_state["add_image"] = ""
         # Check if we just added a product successfully
         if st.session_state.get("product_added_success"):
             product_name = st.session_state.get("product_added_name", "Product")
             st.toast(f"✅ Product '{product_name}' added", icon="✅")
             del st.session_state["product_added_success"]
             del st.session_state["product_added_name"]
+            st.session_state.pop("add_product_busy", None)
 
         name = st.text_input("Product Name *", key="add_name")
+        inactive_match = None
+        active_exists = False
+        active_names = set()
+        if not df.empty and "name" in df.columns:
+            active_names = {
+                n.strip().casefold()
+                for n in df["name"].dropna().astype(str).tolist()
+                if str(n).strip()
+            }
+        if name:
+            normalized = name.strip().casefold()
+            if normalized in active_names:
+                active_exists = True
+            else:
+                match = find_product_by_name(conn, name)
+                if match:
+                    inactive_match = match
         # Category input with suggestions from existing products
         existing_categories = (
             sorted(set(df["category"].dropna().unique()), key=str.casefold)
@@ -394,8 +460,47 @@ def render(conn):
             if local_image:
                 image = local_image
         # Disable add button if required fields are missing
-        add_btn_disabled = not name or cost is None or sale is None or stock is None
+        add_btn_disabled = (
+            not name
+            or cost is None
+            or sale is None
+            or stock is None
+            or inactive_match is not None
+            or active_exists
+        )
         add_busy = st.session_state.get("add_product_busy", False)
+        if inactive_match is not None:
+            st.warning("A product with this name exists but is inactive.")
+            if st.button("♻️ Restore and Update", disabled=add_busy):
+                st.session_state["add_product_busy"] = True
+                try:
+                    restore_product(conn, inactive_match["name"])
+                    update_product(
+                        conn,
+                        (
+                            name,
+                            category,
+                            brand,
+                            desc,
+                            image,
+                            float(cost),
+                            float(sale),
+                            "",  # Empty supplier - will be filled when recording movements
+                            inactive_match["name"],
+                        ),
+                    )
+                    set_product_stock(conn, name, int(stock))
+                except Exception as e:
+                    st.toast(f"❌ Could not restore product: {e}", icon="⚠️")
+                else:
+                    st.session_state["product_added_success"] = True
+                    st.session_state["product_added_name"] = name
+                    st.session_state["reset_add_form"] = True
+                    st.session_state["add_product_busy"] = False
+                    st.rerun()
+                st.session_state["add_product_busy"] = False
+        elif active_exists:
+            st.error("A product with this name already exists.")
         if st.button("✅ Add Product", disabled=add_btn_disabled or add_busy):
             st.session_state["add_product_busy"] = True
             try:
@@ -407,32 +512,35 @@ def render(conn):
                         brand,
                         desc,
                         image,
-                        int(stock),
+                        0,  # Track initial stock via movement log
                         float(cost),
                         float(sale),
                         "",  # Empty supplier - will be filled when recording movements
                     ),
                 )
+                if int(stock) > 0:
+                    record_movement(
+                        conn,
+                        (
+                            name,
+                            category,
+                            "INITIAL STOCK",
+                            int(stock),
+                            float(cost) if cost is not None else "N/A",
+                            "",
+                            "Auto-created on product add",
+                            datetime.now().date(),
+                        ),
+                    )
             except (sqlite3.IntegrityError, psycopg2.IntegrityError):
                 st.toast(f"❌ Product '{name}' already exists.", icon="⚠️")
             except Exception as e:
                 st.toast(f"❌ Could not add product: {e}", icon="⚠️")
             else:
-                # Set flag to show success toast on next run
+                # Set flag to show success toast and reset on next run
                 st.session_state["product_added_success"] = True
                 st.session_state["product_added_name"] = name
-                # clear form values but keep category selection
-                for k in [
-                    "add_name",
-                    "add_category",
-                    "add_brand",
-                    "add_cost",
-                    "add_sale",
-                    "add_stock",
-                    "add_desc",
-                    "add_image",
-                ]:
-                    st.session_state.pop(k, None)
+                st.session_state["reset_add_form"] = True
                 st.session_state["add_product_busy"] = False
                 st.rerun()
             st.session_state["add_product_busy"] = False

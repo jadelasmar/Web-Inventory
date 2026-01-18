@@ -45,7 +45,7 @@ def render_products_table(df, conn):
         "current_stock",
         "cost_price",
         "sale_price",
-        "supplier",
+        "party",
         "description",
         "image_url",
     ]
@@ -67,7 +67,7 @@ def render_products_table(df, conn):
             "current_stock": "Stock",
             "cost_price": "Cost",
             "sale_price": "Price",
-            "supplier": "Supplier",
+            "party": "Party",
             "description": "Description",
             "image_url": "Image",
         }

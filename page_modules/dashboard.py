@@ -41,25 +41,25 @@ def render(conn):
     else:
         col2.metric("Avg Profit Margin", "N/A")
 
-    # Total suppliers (from products + movements)
-    suppliers_from_products = set(df["supplier"].dropna().unique())
-    movements_df = get_movements(conn, days=None, types=["PURCHASE"])
-    if not movements_df.empty:
-        suppliers_from_movements = set(
+    # Total parties (from products + movements)
+    parties_from_products = set(df["supplier"].dropna().unique())
+    movements_df = get_movements(conn, days=None, types=None)
+    if not movements_df.empty and "supplier_customer" in movements_df.columns:
+        parties_from_movements = set(
             movements_df["supplier_customer"].dropna().unique()
         )
-        total_suppliers = suppliers_from_products | suppliers_from_movements
+        total_parties = parties_from_products | parties_from_movements
     else:
-        total_suppliers = suppliers_from_products
-    col3.metric("Total Suppliers", len(total_suppliers))
+        total_parties = parties_from_products
+    col3.metric("Total Parties", len(total_parties))
 
-    # Total customers (from sales movements)
+    # Parties involved in sales (subset for quick signal)
     customer_movements = get_movements(conn, days=None, types=["SALE"])
-    if not customer_movements.empty:
+    if not customer_movements.empty and "supplier_customer" in customer_movements.columns:
         customers = set(customer_movements["supplier_customer"].dropna().unique())
-        col4.metric("Total Customers", len(customers))
+        col4.metric("Parties (Sales)", len(customers))
     else:
-        col4.metric("Total Customers", 0)
+        col4.metric("Parties (Sales)", 0)
 
     # Row 3: Product insights
     col1, col2, col3, col4 = st.columns(4)

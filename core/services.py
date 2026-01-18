@@ -121,6 +121,8 @@ def init_db(conn: DBConnection) -> None:
                 cur.execute(
                     "ALTER TABLE products ADD COLUMN isactive INTEGER DEFAULT 1"
                 )
+            # Normalize nulls for older rows
+            cur.execute("UPDATE products SET isactive=1 WHERE isactive IS NULL")
         else:
             cur.execute("PRAGMA table_info(products)")
             cols = [r[1] for r in cur.fetchall()]
@@ -128,6 +130,8 @@ def init_db(conn: DBConnection) -> None:
                 cur.execute(
                     "ALTER TABLE products ADD COLUMN isactive INTEGER DEFAULT 1"
                 )
+            # Normalize nulls for older rows
+            cur.execute("UPDATE products SET isactive=1 WHERE isactive IS NULL")
     except Exception:
         pass
 
@@ -181,6 +185,49 @@ def add_product(conn: DBConnection, data: tuple) -> None:
         data,
     )
     conn.commit()
+    # Invalidate products cache so new items appear immediately
+    st.session_state["products_cache_version"] = st.session_state.get(
+        "products_cache_version", 0
+    ) + 1
+
+
+def set_product_stock(conn: DBConnection, name: str, stock: int) -> None:
+    """Set the current stock for a product by name."""
+    placeholder = "%s" if is_postgres(conn) else "?"
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE products SET current_stock={placeholder} WHERE name={placeholder}",
+        (int(stock), name),
+    )
+    conn.commit()
+    st.session_state["products_cache_version"] = st.session_state.get(
+        "products_cache_version", 0
+    ) + 1
+
+
+def find_product_by_name(conn: DBConnection, name: str) -> Optional[dict]:
+    """Find a product by name (case-insensitive). Returns dict with isactive."""
+    placeholder = "%s" if is_postgres(conn) else "?"
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"SELECT name, COALESCE(isactive, 1) FROM products WHERE LOWER(name) = {placeholder}",
+            (name.lower(),),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return {"name": row[0], "isactive": int(row[1] or 1)}
+    except Exception:
+        # Fallback for older schemas without isactive
+        cur.execute(
+            f"SELECT name FROM products WHERE LOWER(name) = {placeholder}",
+            (name.lower(),),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return {"name": row[0], "isactive": 1}
 
 
 def update_product(conn: DBConnection, data: tuple) -> None:
@@ -248,11 +295,15 @@ def delete_product(conn: DBConnection, name: str) -> None:
     """Soft-delete a product by marking it inactive (isactive=0). Owner only."""
     placeholder = "%s" if is_postgres(conn) else "?"
     cur = conn.cursor()
+    cur.execute(f"DELETE FROM movements WHERE product_name={placeholder}", (name,))
     cur.execute(f"UPDATE products SET isactive=0 WHERE name={placeholder}", (name,))
     conn.commit()
     # Invalidate products cache
     st.session_state["products_cache_version"] = st.session_state.get(
         "products_cache_version", 0
+    ) + 1
+    st.session_state["movements_cache_version"] = st.session_state.get(
+        "movements_cache_version", 0
     ) + 1
 
 
@@ -365,6 +416,7 @@ def record_movement(conn: DBConnection, data: tuple) -> None:
         st.session_state["movements_cache_version"] = st.session_state.get(
             "movements_cache_version", 0
         ) + 1
+        st.cache_data.clear()
 
 
 def get_products(
@@ -473,7 +525,7 @@ def delete_movement(conn: DBConnection, movement_id: int) -> None:
             # PURCHASE/RECEIVED added stock, so subtract it back
             # SALE/ISSUED subtracted stock, so add it back
             # ADJUSTMENT could be +/-, reverse the sign
-            if movement_type in ["PURCHASE", "RECEIVED"]:
+            if movement_type in ["PURCHASE", "RECEIVED", "INITIAL STOCK"]:
                 stock_adjustment = -quantity  # Subtract what was added
             elif movement_type in ["SALE", "ISSUED"]:
                 stock_adjustment = quantity  # Add back what was subtracted
@@ -503,6 +555,7 @@ def delete_movement(conn: DBConnection, movement_id: int) -> None:
         st.session_state["movements_cache_version"] = st.session_state.get(
             "movements_cache_version", 0
         ) + 1
+        st.cache_data.clear()
 
 
 # ============================================================================
