@@ -12,7 +12,7 @@ LEBANON_TZ = ZoneInfo("Asia/Beirut")
 def render(conn):
     """Render the stock movement page."""
     if not st.session_state.admin_mode:
-        st.warning("🔒 Admin only")
+        st.warning("\U0001F512 Admin only")
         return
 
     if st.session_state.pop("reset_movement_form", False):
@@ -32,12 +32,12 @@ def render(conn):
     # Check if movement was just recorded and show toast
     if st.session_state.get("movement_recorded_success"):
         movement_msg = st.session_state.get("movement_recorded_msg", "Movement recorded")
-        st.toast(movement_msg, icon="📦")
+        st.toast(movement_msg, icon="\U0001F4E6")
         del st.session_state["movement_recorded_success"]
         del st.session_state["movement_recorded_msg"]
         st.session_state.pop("movement_busy", None)
     
-    st.header("📦 Record Stock Movement")
+    st.header("\U0001F4E6 Record Stock Movement")
     df = get_products(conn)
     if df.empty:
         st.info("No products available")
@@ -90,7 +90,10 @@ def render(conn):
     qty_input = st.text_input("Quantity", key=qty_key)
     try:
         qty_val = int(qty_input)
-        valid_qty = qty_val > 0
+        if mtype == "ADJUSTMENT":
+            valid_qty = qty_val != 0
+        else:
+            valid_qty = qty_val > 0
     except ValueError:
         valid_qty = False
 
@@ -188,7 +191,7 @@ def render(conn):
     move_busy = st.session_state.get("movement_busy", False)
     btn_disabled = not valid_qty or insufficient_stock or move_busy
     if st.button(
-        "📝 Record Movement",
+        "\U0001F4DD Record Movement",
         disabled=btn_disabled,
     ):
         st.session_state["movement_busy"] = True
@@ -208,10 +211,10 @@ def render(conn):
             )
         except Exception as e:
             # Surface errors to the user (e.g., insufficient stock)
-            st.toast(f"❌ {e}", icon="⚠️")
+            st.toast(f"\u274C {e}", icon="\u26A0\ufe0f")
         else:
             # Set flag to show toast after rerun
-            msg = f"📦 {mtype} of {qty_val} units for {row['name']} recorded"
+            msg = f"\U0001F4E6 {mtype} of {qty_val} units for {row['name']} recorded"
             st.session_state["movement_recorded_success"] = True
             st.session_state["movement_recorded_msg"] = msg
             st.session_state["reset_movement_form"] = True

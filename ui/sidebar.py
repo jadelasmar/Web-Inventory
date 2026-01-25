@@ -2,6 +2,15 @@
 import streamlit as st
 import base64
 from core.simple_auth import logout, get_current_user
+from core.constants import (
+    MENU_DASHBOARD,
+    MENU_INVENTORY,
+    MENU_ALERTS,
+    MENU_MOVEMENTS,
+    MENU_ADD_PRODUCT,
+    MENU_STOCK_MOVEMENT,
+    MENU_USER_MANAGEMENT,
+)
 
 
 def render_sidebar_menu():
@@ -42,12 +51,12 @@ def render_sidebar_menu():
     st.sidebar.divider()
     
     # Navigation menu
-    menu = ["📈 Dashboard", "🗂️ View Inventory", "🚨 Stock Alerts", "🔁 Movement Log"]
+    menu = [MENU_DASHBOARD, MENU_INVENTORY, MENU_ALERTS, MENU_MOVEMENTS]
     if st.session_state.admin_mode:
         # Only show admin pages if admin_mode is enabled
-        menu.insert(1, "➕ Add Product")
-        menu.insert(2, "📦 Stock Movement")
-        menu.append("🧑‍💻 User Management")
+        menu.insert(1, MENU_ADD_PRODUCT)
+        menu.insert(2, MENU_STOCK_MOVEMENT)
+        menu.append(MENU_USER_MANAGEMENT)
     if (
         "menu_selection" not in st.session_state
         or st.session_state.menu_selection not in menu
@@ -59,11 +68,11 @@ def render_sidebar_menu():
     
     # Show current user info
     user = get_current_user()
-    st.sidebar.markdown(f"🪪 **{user['name']}**")
+    st.sidebar.markdown(f"\U0001FAA7 **{user['name']}**")
     st.sidebar.caption(f"Role: {user['role'].title()}")
     
     # Logout button
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
+    if st.sidebar.button("\U0001F6AA Logout", use_container_width=True):
         logout()
         st.rerun()
     

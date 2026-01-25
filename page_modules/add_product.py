@@ -29,7 +29,61 @@ def _resolve_local_image(product_name: str) -> str:
 
 
 def _is_external_url(image_path: str) -> bool:
-    return image_path.startswith(("http://", "https://"))
+    return bool(image_path) and image_path.startswith(("http://", "https://"))
+
+
+def _category_input(df, key: str) -> str:
+    """Render category input with suggestions and return normalized value."""
+    existing_categories = (
+        sorted(set(df["category"].dropna().unique()), key=str.casefold)
+        if not df.empty and "category" in df.columns
+        else sorted(POS_CATEGORIES, key=str.casefold)
+    )
+    category_input = st.text_input("Category", key=key)
+    category_match = next(
+        (c for c in existing_categories if c.lower() == (category_input or "").lower()),
+        None,
+    )
+    category_suggestions = [
+        c
+        for c in existing_categories
+        if category_input and category_input.lower() in c.lower()
+    ]
+    if category_input:
+        if category_match:
+            st.info(f"Using existing category: {category_match}")
+        else:
+            st.info("This will be a new category.")
+        if category_suggestions and not category_match:
+            st.write("Suggestions:")
+            st.write(", ".join(category_suggestions))
+    return category_match if category_match else (category_input.title() if category_input else "")
+
+
+def _brand_input(df, key: str) -> str:
+    """Render brand input with suggestions and return normalized value."""
+    existing_brands = (
+        sorted(set(df["brand"].dropna().unique()), key=str.casefold)
+        if not df.empty and "brand" in df.columns
+        else []
+    )
+    brand_input = st.text_input("Brand", key=key)
+    brand_match = next(
+        (b for b in existing_brands if b.lower() == (brand_input or "").lower()),
+        None,
+    )
+    brand_suggestions = [
+        b for b in existing_brands if brand_input and brand_input.lower() in b.lower()
+    ]
+    if brand_input:
+        if brand_match:
+            st.info(f"Will use existing brand: {brand_match}")
+        else:
+            st.info("This will be a new brand.")
+        if brand_suggestions and not brand_match:
+            st.write("Suggestions:")
+            st.write(", ".join(brand_suggestions))
+    return brand_match if brand_match else brand_input
 
 
 def _maybe_rename_local_image(old_name: str, new_name: str, image_path: str) -> str:
@@ -72,19 +126,19 @@ def _maybe_rename_local_image(old_name: str, new_name: str, image_path: str) -> 
 def render(conn):
     """Render the add/edit product page."""
     if not st.session_state.admin_mode:
-        st.warning("🔒 Admin only")
+        st.warning("\U0001F512 Admin only")
         return
     if st.session_state.get("product_deleted_success"):
         deleted_name = st.session_state.get("product_deleted_name", "Product")
-        st.toast(f"Deleted '{deleted_name}'", icon="🗑️")
+        st.toast(f"Deleted '{deleted_name}'", icon="\U0001F5D1\ufe0f")
         del st.session_state["product_deleted_success"]
         del st.session_state["product_deleted_name"]
     if st.session_state.get("product_restored_success"):
         restored_name = st.session_state.get("product_restored_name", "Product")
-        st.toast(f"Restored '{restored_name}'", icon="♻️")
+        st.toast(f"Restored '{restored_name}'", icon="\u267B\ufe0f")
         del st.session_state["product_restored_success"]
         del st.session_state["product_restored_name"]
-    st.header("➕ Add / Edit Product")
+    st.header("\u2795 Add / Edit Product")
     df = get_products(conn)
 
     # Sort products alphabetically for predictability (case-insensitive)
@@ -95,19 +149,19 @@ def render(conn):
     mode = st.radio(
         "Choose option",
         [
-            "🧾 Create New Product",
-            "📝 Edit Existing Product",
+            "\U0001F9FE Create New Product",
+            "\U0001F4DD Edit Existing Product",
         ],
         horizontal=True,
         key="add_mode",
     )
 
     # ---------- Edit Existing Product (persistent fields) ----------
-    if mode == "📝 Edit Existing Product" and not df.empty:
+    if mode == "\U0001F4DD Edit Existing Product" and not df.empty:
         # Show update toast after rerun
         if st.session_state.get("product_updated_success"):
             updated_name = st.session_state.get("product_updated_name", "Product")
-            st.toast(f"✅ Product '{updated_name}' updated", icon="💾")
+            st.toast(f"\u2705 Product '{updated_name}' updated", icon="\U0001F4BE")
             del st.session_state["product_updated_success"]
             del st.session_state["product_updated_name"]
             st.session_state.pop("update_product_busy", None)
@@ -119,7 +173,7 @@ def render(conn):
         
         if user['role'] == 'owner' and "isactive" in df.columns:
             product_names_display = [
-                f"{name} {'✅' if df[df['name']==name].iloc[0]['isactive']==1 else '❌ (Inactive)'}"
+                f"{name} {'\u2705' if df[df['name']==name].iloc[0]['isactive']==1 else '\u274C (Inactive)'}"
                 for name in product_names_original
             ]
         
@@ -160,69 +214,15 @@ def render(conn):
 
         edit_name = st.text_input("Product Name *", key="edit_name")
         # Category input with suggestions from existing products
-        existing_categories = (
-            sorted(set(df["category"].dropna().unique()), key=str.casefold)
-            if not df.empty and "category" in df.columns
-            else sorted(POS_CATEGORIES, key=str.casefold)
-        )
-        category_input = st.text_input("Category", key="edit_category")
-        category_match = next(
-            (
-                c
-                for c in existing_categories
-                if c.lower() == (category_input or "").lower()
-            ),
-            None,
-        )
-        category_suggestions = [
-            c
-            for c in existing_categories
-            if category_input and category_input.lower() in c.lower()
-        ]
-        if category_input:
-            if category_match:
-                st.info(f"Using existing category: {category_match}")
-            else:
-                st.info("This will be a new category.")
-            if category_suggestions and not category_match:
-                st.write("Suggestions:")
-                st.write(", ".join(category_suggestions))
-        category = category_match if category_match else (category_input.title() if category_input else "")
+        category = _category_input(df, "edit_category")
 
         # Brand input with live suggestions and deduplication
-        existing_brands = (
-            sorted(set(df["brand"].dropna().unique()), key=str.casefold)
-            if not df.empty and "brand" in df.columns
-            else []
-        )
-        brand_input = st.text_input("Brand", key="edit_brand")
-        brand_match = next(
-            (
-                b
-                for b in existing_brands
-                if b.lower() == (brand_input or "").lower()
-            ),
-            None,
-        )
-        brand_suggestions = [
-            b
-            for b in existing_brands
-            if brand_input and brand_input.lower() in b.lower()
-        ]
-        if brand_input:
-            if brand_match:
-                st.info(f"Will use existing brand: {brand_match}")
-            else:
-                st.info("This will be a new brand.")
-            if brand_suggestions and not brand_match:
-                st.write("Suggestions:")
-                st.write(", ".join(brand_suggestions))
-        brand = brand_match if brand_match else brand_input
+        brand = _brand_input(df, "edit_brand")
         
         supplier = row.get("supplier", "")
         
         # When keys are set in `st.session_state` (above) avoid passing an
-        # explicit `value=` to the widget — Streamlit warns if a widget is
+        # explicit `value=` to the widget -- Streamlit warns if a widget is
         # created with both a default value and a session-state value.
         cost = st.number_input("Cost", key="edit_cost")
         sale = st.number_input("Price", key="edit_sale")
@@ -279,7 +279,7 @@ def render(conn):
             update_btn_disabled = not edit_name or not edit_dirty
             update_busy = st.session_state.get("update_product_busy", False)
             if st.button(
-                "💾 Update Product",
+                "\U0001F4BE Update Product",
                 use_container_width=True,
                 disabled=update_btn_disabled or update_busy,
             ):
@@ -301,11 +301,11 @@ def render(conn):
                     )
                 except (sqlite3.IntegrityError, psycopg2.IntegrityError):
                     st.toast(
-                        f"❌ Product '{edit_name or selected}' already exists.",
-                        icon="⚠️",
+                        f"\u274C Product '{edit_name or selected}' already exists.",
+                        icon="\u26A0\ufe0f",
                     )
                 except Exception as e:
-                    st.toast(f"❌ Could not update product: {e}", icon="⚠️")
+                    st.toast(f"\u274C Could not update product: {e}", icon="\u26A0\ufe0f")
                 else:
                     st.session_state["product_updated_success"] = True
                     st.session_state["product_updated_name"] = edit_name or selected
@@ -333,13 +333,13 @@ def render(conn):
                 is_active = product.get("isactive", 1) == 1
                 
                 if is_active:
-                    if st.button("🗑️ Delete", use_container_width=True):
+                    if st.button("\U0001F5D1\ufe0f Delete", use_container_width=True):
                         delete_product(conn, selected)
                         st.session_state["product_deleted_success"] = True
                         st.session_state["product_deleted_name"] = selected
                         st.rerun()
                 else:
-                    if st.button("♻️ Restore", use_container_width=True):
+                    if st.button("\u267B\ufe0f Restore", use_container_width=True):
                         restore_product(conn, selected)
                         st.session_state["product_restored_success"] = True
                         st.session_state["product_restored_name"] = selected
@@ -359,7 +359,7 @@ def render(conn):
         # Check if we just added a product successfully
         if st.session_state.get("product_added_success"):
             product_name = st.session_state.get("product_added_name", "Product")
-            st.toast(f"✅ Product '{product_name}' added", icon="✅")
+            st.toast(f"\u2705 Product '{product_name}' added", icon="\u2705")
             del st.session_state["product_added_success"]
             del st.session_state["product_added_name"]
             st.session_state.pop("add_product_busy", None)
@@ -383,64 +383,10 @@ def render(conn):
                 if match:
                     inactive_match = match
         # Category input with suggestions from existing products
-        existing_categories = (
-            sorted(set(df["category"].dropna().unique()), key=str.casefold)
-            if not df.empty and "category" in df.columns
-            else sorted(POS_CATEGORIES, key=str.casefold)
-        )
-        category_input = st.text_input("Category", key="add_category")
-        category_match = next(
-            (
-                c
-                for c in existing_categories
-                if c.lower() == (category_input or "").lower()
-            ),
-            None,
-        )
-        category_suggestions = [
-            c
-            for c in existing_categories
-            if category_input and category_input.lower() in c.lower()
-        ]
-        if category_input:
-            if category_match:
-                st.info(f"Using existing category: {category_match}")
-            else:
-                st.info("This will be a new category.")
-            if category_suggestions and not category_match:
-                st.write("Suggestions:")
-                st.write(", ".join(category_suggestions))
-        category = category_match if category_match else (category_input.title() if category_input else "")
+        category = _category_input(df, "add_category")
 
         # Brand input with live suggestions and deduplication
-        existing_brands = (
-            sorted(set(df["brand"].dropna().unique()), key=str.casefold)
-            if not df.empty and "brand" in df.columns
-            else []
-        )
-        brand_input = st.text_input("Brand", key="add_brand")
-        brand_match = next(
-            (
-                b
-                for b in existing_brands
-                if b.lower() == (brand_input or "").lower()
-            ),
-            None,
-        )
-        brand_suggestions = [
-            b
-            for b in existing_brands
-            if brand_input and brand_input.lower() in b.lower()
-        ]
-        if brand_input:
-            if brand_match:
-                st.info(f"Will use existing brand: {brand_match}")
-            else:
-                st.info("This will be a new brand.")
-            if brand_suggestions and not brand_match:
-                st.write("Suggestions:")
-                st.write(", ".join(brand_suggestions))
-        brand = brand_match if brand_match else brand_input
+        brand = _brand_input(df, "add_brand")
         
         # Add stock input for new product
         stock = st.number_input("Stock", min_value=0, key="add_stock")
@@ -455,7 +401,7 @@ def render(conn):
         desc = st.text_area("Description", key="add_desc")
         image = st.text_input("Image URL", key="add_image")
         # Auto-assign image if field is empty or local path and file exists in assets/product_images
-        if not image or not image.startswith(("http://", "https://")):
+        if not image or not _is_external_url(image):
             local_image = _resolve_local_image(name)
             if local_image:
                 image = local_image
@@ -471,7 +417,7 @@ def render(conn):
         add_busy = st.session_state.get("add_product_busy", False)
         if inactive_match is not None:
             st.warning("A product with this name exists but is inactive.")
-            if st.button("♻️ Restore and Update", disabled=add_busy):
+            if st.button("\u267B\ufe0f Restore and Update", disabled=add_busy):
                 st.session_state["add_product_busy"] = True
                 try:
                     restore_product(conn, inactive_match["name"])
@@ -491,7 +437,7 @@ def render(conn):
                     )
                     set_product_stock(conn, name, int(stock))
                 except Exception as e:
-                    st.toast(f"❌ Could not restore product: {e}", icon="⚠️")
+                    st.toast(f"\u274C Could not restore product: {e}", icon="\u26A0\ufe0f")
                 else:
                     st.session_state["product_added_success"] = True
                     st.session_state["product_added_name"] = name
@@ -501,7 +447,7 @@ def render(conn):
                 st.session_state["add_product_busy"] = False
         elif active_exists:
             st.error("A product with this name already exists.")
-        if st.button("✅ Add Product", disabled=add_btn_disabled or add_busy):
+        if st.button("\u2705 Add Product", disabled=add_btn_disabled or add_busy):
             st.session_state["add_product_busy"] = True
             try:
                 add_product(
@@ -533,9 +479,9 @@ def render(conn):
                         ),
                     )
             except (sqlite3.IntegrityError, psycopg2.IntegrityError):
-                st.toast(f"❌ Product '{name}' already exists.", icon="⚠️")
+                st.toast(f"\u274C Product '{name}' already exists.", icon="\u26A0\ufe0f")
             except Exception as e:
-                st.toast(f"❌ Could not add product: {e}", icon="⚠️")
+                st.toast(f"\u274C Could not add product: {e}", icon="\u26A0\ufe0f")
             else:
                 # Set flag to show success toast and reset on next run
                 st.session_state["product_added_success"] = True

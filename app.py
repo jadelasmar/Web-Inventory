@@ -2,6 +2,15 @@
 import logging
 import streamlit as st
 from core.db_init import init_db
+from core.constants import (
+    MENU_DASHBOARD,
+    MENU_INVENTORY,
+    MENU_ALERTS,
+    MENU_MOVEMENTS,
+    MENU_ADD_PRODUCT,
+    MENU_STOCK_MOVEMENT,
+    MENU_USER_MANAGEMENT,
+)
 from core.simple_auth import login_form, require_auth, get_current_user
 from core.mobile_styles import apply_mobile_styles
 from ui.sidebar import render_sidebar_menu
@@ -18,7 +27,7 @@ from page_modules import dashboard, inventory, add_product, stock_movement, aler
 # Page configuration
 st.set_page_config(
     page_title="BIM POS Inventory",
-    page_icon="💳",
+    page_icon="\U0001F4B3",
     layout="wide",
 )
 
@@ -46,7 +55,7 @@ if "admin_mode" not in st.session_state:
 if "show_admin_login" not in st.session_state:
     st.session_state.show_admin_login = False
 if "menu_selection" not in st.session_state:
-    st.session_state.menu_selection = "📈 Dashboard"
+    st.session_state.menu_selection = MENU_DASHBOARD
 if "input_values" not in st.session_state:
     st.session_state.input_values = {}
 
@@ -55,19 +64,19 @@ menu = render_sidebar_menu()
 
 # Page routing
 pages = {
-    "📈 Dashboard": lambda: dashboard.render(conn),
-    "🗂️ View Inventory": lambda: inventory.render(conn),
-    "🚨 Stock Alerts": lambda: alerts.render(conn),
-    "🔁 Movement Log": lambda: movements.render(conn),
+    MENU_DASHBOARD: lambda: dashboard.render(conn),
+    MENU_INVENTORY: lambda: inventory.render(conn),
+    MENU_ALERTS: lambda: alerts.render(conn),
+    MENU_MOVEMENTS: lambda: movements.render(conn),
 }
 
 # Add admin-only pages
 if st.session_state.admin_mode:
-    pages["➕ Add Product"] = lambda: add_product.render(conn)
-    pages["📦 Stock Movement"] = lambda: stock_movement.render(conn)
-    pages["🧑‍💻 User Management"] = lambda: user_management.render(conn)
+    pages[MENU_ADD_PRODUCT] = lambda: add_product.render(conn)
+    pages[MENU_STOCK_MOVEMENT] = lambda: stock_movement.render(conn)
+    pages[MENU_USER_MANAGEMENT] = lambda: user_management.render(conn)
 
 # Render selected page
 if menu not in pages:
-    menu = "📈 Dashboard"
+    menu = MENU_DASHBOARD
 pages[menu]()

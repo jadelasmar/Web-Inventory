@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 LEBANON_TZ = ZoneInfo("Asia/Beirut")
 SESSION_FILE = ".streamlit/user_session.json"
-SESSION_DURATION_DAYS = 30  # Stay logged in for 30 days
+SESSION_DURATION_DAYS = 30  # Stay logged in for 30 days (when Remember Me is off)
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
-def save_session(username: str, name: str, role: str):
+def save_session(username: str, name: str, role: str, remember: bool = False):
     """Save user session to file."""
     try:
         os.makedirs(".streamlit", exist_ok=True)
@@ -27,7 +27,10 @@ def save_session(username: str, name: str, role: str):
             'username': username,
             'name': name,
             'role': role,
-            'expires': (datetime.now(LEBANON_TZ) + timedelta(days=SESSION_DURATION_DAYS)).isoformat()
+            'remember': bool(remember),
+            'expires': None if remember else (
+                datetime.now(LEBANON_TZ) + timedelta(days=SESSION_DURATION_DAYS)
+            ).isoformat(),
         }
         with open(SESSION_FILE, 'w') as f:
             json.dump(session_data, f)
@@ -46,11 +49,15 @@ def load_session():
         with open(SESSION_FILE, 'r') as f:
             session_data = json.load(f)
         
-        # Check if session has expired
-        expires = datetime.fromisoformat(session_data['expires'])
-        if datetime.now(LEBANON_TZ) > expires:
-            clear_session()
-            return None, None, None
+        # Check if session has expired (skip if remember is enabled)
+        if session_data.get('remember'):
+            return session_data['username'], session_data['name'], session_data['role']
+        expires_raw = session_data.get('expires')
+        if expires_raw:
+            expires = datetime.fromisoformat(expires_raw)
+            if datetime.now(LEBANON_TZ) > expires:
+                clear_session()
+                return None, None, None
         
         return session_data['username'], session_data['name'], session_data['role']
     except Exception:
@@ -181,10 +188,11 @@ def login_form(conn):
     
     if not st.session_state.show_signup:
         # Show Login Form
-        st.markdown("### 🔐 Login")
+        st.markdown("### \U0001F510 Login")
         with st.form("login_form", clear_on_submit=False):
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
+            remember_me = st.checkbox("Remember me on this device", value=True)
             submit = st.form_submit_button("Login", use_container_width=True)
             
             if submit:
@@ -199,22 +207,22 @@ def login_form(conn):
                         st.session_state.admin_mode = (role in ['admin', 'owner'])
                         
                         # Save session for auto-login
-                        save_session(username, name, role)
+                        save_session(username, name, role, remember=remember_me)
                         
                         st.rerun()
                     else:
-                        st.error("❌ Invalid username or password")
+                        st.error("\u274C Invalid username or password")
                 else:
-                    st.warning("⚠️ Please enter both username and password")
+                    st.warning("\u26A0\ufe0f Please enter both username and password")
         
         # Link to signup
-        if st.button("📝 Don't have an account? Sign up here"):
+        if st.button("\U0001F4DD Don't have an account? Sign up here"):
             st.session_state.show_signup = True
             st.rerun()
     
     else:
         # Show Signup Form
-        st.markdown("### 📝 Sign Up")
+        st.markdown("### \U0001F4DD Sign Up")
         with st.form("signup_form", clear_on_submit=False):
             new_username = st.text_input("Choose Username", key="signup_username")
             new_name = st.text_input("Full Name", key="signup_name")
@@ -224,17 +232,17 @@ def login_form(conn):
             
             if signup_submit:
                 if new_password != confirm_password:
-                    st.error("❌ Passwords don't match")
+                    st.error("\u274C Passwords don't match")
                 else:
                     success, message = signup_user(conn, new_username, new_password, new_name)
                     if success:
-                        st.success(f"✅ {message}")
+                        st.success(f"\u2705 {message}")
                         st.info("Please wait for admin approval before logging in.")
                     else:
-                        st.error(f"❌ {message}")
+                        st.error(f"\u274C {message}")
         
         # Link back to login
-        if st.button("🔐 Already have an account? Login here"):
+        if st.button("\U0001F510 Already have an account? Login here"):
             st.session_state.show_signup = False
             st.rerun()
 

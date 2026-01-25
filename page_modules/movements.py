@@ -7,28 +7,36 @@ from core.simple_auth import get_current_user
 
 def render(conn):
     """Render the movement log page."""
-    st.header("🔁 Movement Log")
+    st.header("\U0001F501 Movement Log")
     if st.session_state.get("movement_deleted_success"):
         msg = st.session_state.get("movement_deleted_msg", "Movement deleted")
-        st.toast(msg, icon="🗑️")
+        st.toast(msg, icon="\U0001F5D1\ufe0f")
         del st.session_state["movement_deleted_success"]
         del st.session_state["movement_deleted_msg"]
     days = st.selectbox("Last", [1, 7, 30, 90, "All"])
     movement_filter_types = MOVEMENT_TYPES + ["INITIAL STOCK"]
     types = st.multiselect("Type", movement_filter_types, default=movement_filter_types)
     days_val = None if days == "All" else days
-    df = get_movements(conn, days_val, types)
+    if not types:
+        df = get_movements(conn, days_val, None).iloc[0:0]
+    else:
+        df = get_movements(conn, days_val, types)
     
     search = st.text_input("Search by name, category, or party")
     if not df.empty:
         # Case-insensitive partial search across product_name, product_category, party
         if search:
-            mask = (
-                df["product_name"].str.contains(search, case=False, na=False, regex=False)
-                | df["product_category"].str.contains(search, case=False, na=False, regex=False)
-                | df["supplier_customer"].str.contains(search, case=False, na=False, regex=False)
-            )
-            df = df[mask]
+            mask = None
+            if "product_name" in df.columns:
+                mask = df["product_name"].str.contains(search, case=False, na=False, regex=False)
+            if "product_category" in df.columns:
+                col_mask = df["product_category"].str.contains(search, case=False, na=False, regex=False)
+                mask = col_mask if mask is None else (mask | col_mask)
+            if "supplier_customer" in df.columns:
+                col_mask = df["supplier_customer"].str.contains(search, case=False, na=False, regex=False)
+                mask = col_mask if mask is None else (mask | col_mask)
+            if mask is not None:
+                df = df[mask]
         if "product_name" in df.columns:
             df = df.sort_values("product_name", key=lambda s: s.str.casefold())
 
@@ -100,11 +108,11 @@ def render(conn):
                 movement_desc = f"{movement_name} - {movement_type} - Qty: {movement_qty} - {movement_date}"
                 st.text(movement_desc)
             with col2:
-                if st.button("🗑️", key=f"del_{movement_id}_{idx}"):
+                if st.button("\U0001F5D1\ufe0f", key=f"del_{movement_id}_{idx}"):
                     try:
                         delete_movement(conn, int(movement_id))
                     except Exception as e:
-                        st.toast(f"❌ Delete failed: {e}", icon="⚠️")
+                        st.toast(f"\u274C Delete failed: {e}", icon="\u26A0\ufe0f")
                     else:
                         st.session_state["movement_deleted_success"] = True
                         st.session_state["movement_deleted_msg"] = "Deleted and adjusted stock"

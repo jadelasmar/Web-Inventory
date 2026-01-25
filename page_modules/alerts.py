@@ -6,13 +6,18 @@ from core.services import get_products, get_latest_purchase_parties
 
 def render(conn):
     """Render the stock alerts page."""
-    st.header("🚨 Low Stock Alerts")
+    st.header("\U0001F6A8 Low Stock Alerts")
     threshold = st.slider("Threshold", 0, 20, LOW_STOCK_THRESHOLD_DEFAULT)
     df = get_products(conn)
+    if df.empty:
+        st.info("No products available")
+        return
     party_map = get_latest_purchase_parties(conn)
-    if not df.empty:
-        df = df.copy()
-        df["party"] = df["name"].map(party_map).fillna("")
+    df = df.copy()
+    df["party"] = df["name"].map(party_map).fillna("")
+    if "current_stock" not in df.columns:
+        st.info("No stock data available")
+        return
     low = df[df["current_stock"] <= threshold]
     if not low.empty:
         low = low.sort_values("name", key=lambda s: s.str.casefold())

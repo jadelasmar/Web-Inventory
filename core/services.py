@@ -4,15 +4,10 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
 from typing import Iterable, Optional, Union
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
-
-# Lebanon timezone
-LEBANON_TZ = ZoneInfo("Asia/Beirut")
 
 try:
     import psycopg2
@@ -29,6 +24,14 @@ DBConnection = Union[sqlite3.Connection, 'psycopg2.extensions.connection']
 def is_postgres(conn: DBConnection) -> bool:
     """Check if connection is PostgreSQL."""
     return psycopg2 is not None and isinstance(conn, psycopg2.extensions.connection)
+
+
+def _placeholder(conn: DBConnection) -> str:
+    return "%s" if is_postgres(conn) else "?"
+
+
+def _placeholders(conn: DBConnection, count: int) -> str:
+    return ", ".join([_placeholder(conn)] * count)
 
 
 def init_db(conn: DBConnection) -> None:
@@ -165,7 +168,7 @@ def add_product(conn: DBConnection, data: tuple) -> None:
     cur = conn.cursor()
     
     # Use parameterized query appropriate for the database
-    placeholder = "%s" if is_postgres(conn) else "?"
+    placeholder = _placeholder(conn)
     cur.execute(
         f"SELECT name FROM products WHERE LOWER(name) = {placeholder}",
         (name.lower(),)
@@ -174,7 +177,7 @@ def add_product(conn: DBConnection, data: tuple) -> None:
         error_class = psycopg2.IntegrityError if is_postgres(conn) else sqlite3.IntegrityError
         raise error_class("Duplicate product name (case-insensitive)")
     
-    placeholders = ", ".join([placeholder] * len(data))
+    placeholders = _placeholders(conn, len(data))
     cur.execute(
         f"""
         INSERT INTO products (name, category, brand, description, 
@@ -193,7 +196,7 @@ def add_product(conn: DBConnection, data: tuple) -> None:
 
 def set_product_stock(conn: DBConnection, name: str, stock: int) -> None:
     """Set the current stock for a product by name."""
-    placeholder = "%s" if is_postgres(conn) else "?"
+    placeholder = _placeholder(conn)
     cur = conn.cursor()
     cur.execute(
         f"UPDATE products SET current_stock={placeholder} WHERE name={placeholder}",
@@ -207,7 +210,7 @@ def set_product_stock(conn: DBConnection, name: str, stock: int) -> None:
 
 def find_product_by_name(conn: DBConnection, name: str) -> Optional[dict]:
     """Find a product by name (case-insensitive). Returns dict with isactive."""
-    placeholder = "%s" if is_postgres(conn) else "?"
+    placeholder = _placeholder(conn)
     cur = conn.cursor()
     try:
         cur.execute(
@@ -232,7 +235,7 @@ def find_product_by_name(conn: DBConnection, name: str) -> Optional[dict]:
 
 def update_product(conn: DBConnection, data: tuple) -> None:
     """Update product information (allows renaming by name)."""
-    placeholder = "%s" if is_postgres(conn) else "?"
+    placeholder = _placeholder(conn)
     cur = conn.cursor()
     try:
         (
@@ -293,7 +296,7 @@ def update_product(conn: DBConnection, data: tuple) -> None:
 
 def delete_product(conn: DBConnection, name: str) -> None:
     """Soft-delete a product by marking it inactive (isactive=0). Owner only."""
-    placeholder = "%s" if is_postgres(conn) else "?"
+    placeholder = _placeholder(conn)
     cur = conn.cursor()
     cur.execute(f"DELETE FROM movements WHERE product_name={placeholder}", (name,))
     cur.execute(f"UPDATE products SET isactive=0 WHERE name={placeholder}", (name,))
@@ -309,7 +312,7 @@ def delete_product(conn: DBConnection, name: str) -> None:
 
 def restore_product(conn: DBConnection, name: str) -> None:
     """Restore a previously soft-deleted product (isactive=1). Owner only."""
-    placeholder = "%s" if is_postgres(conn) else "?"
+    placeholder = _placeholder(conn)
     cur = conn.cursor()
     cur.execute(f"UPDATE products SET isactive=1 WHERE name={placeholder}", (name,))
     conn.commit()
@@ -349,7 +352,7 @@ def record_movement(conn: DBConnection, data: tuple) -> None:
     if hasattr(movement_date, "isoformat"):
         movement_date = movement_date.isoformat()
 
-    placeholder = "%s" if is_postgres(conn) else "?"
+    placeholder = _placeholder(conn)
     cur = conn.cursor()
     try:
         # read current stock and active flag
@@ -390,7 +393,7 @@ def record_movement(conn: DBConnection, data: tuple) -> None:
                 (supplier_customer, product_name),
             )
 
-        placeholders_list = ", ".join([placeholder] * 8)
+        placeholders_list = _placeholders(conn, 8)
         cur.execute(
             f"""
             INSERT INTO movements (product_name, product_category, 
@@ -460,7 +463,7 @@ def get_products(
             if "isactive" in cols:
                 query = "SELECT * FROM products WHERE isactive=1"
             else:
-                # Older DB without isactive — return all rows (can't filter)
+                # Older DB without isactive -- return all rows (can't filter)
                 query = "SELECT * FROM products"
 
             return pd.read_sql(query, conn)
@@ -490,11 +493,12 @@ def get_movements(
         params = []
         if days:
             if is_postgres(conn):
-                query += f" AND movement_date >= CURRENT_DATE - INTERVAL '{int(days)} days'"
+                # movement_date is stored as TEXT; cast to date for reliable comparison
+                query += f" AND movement_date::date >= CURRENT_DATE - INTERVAL '{int(days)} days'"
             else:
                 query += f" AND movement_date >= date('now','-{int(days)} days')"
         if types_tuple:
-            placeholder = "%s" if is_postgres(conn) else "?"
+            placeholder = _placeholder(conn)
             placeholders = ",".join([placeholder] * len(types_tuple))
             query += f" AND movement_type IN ({placeholders})"
             params.extend(types_tuple)
@@ -531,7 +535,7 @@ def get_latest_purchase_parties(conn: DBConnection) -> dict:
 
 def delete_movement(conn: DBConnection, movement_id: int) -> None:
     """Delete a movement record and adjust stock accordingly. Owner only."""
-    placeholder = "%s" if is_postgres(conn) else "?"
+    placeholder = _placeholder(conn)
     cursor = conn.cursor()
 
     try:
@@ -543,6 +547,11 @@ def delete_movement(conn: DBConnection, movement_id: int) -> None:
         row = cursor.fetchone()
         if row:
             product_name, movement_type, quantity = row
+            try:
+                quantity = int(quantity)
+            except Exception:
+                quantity = 0
+            movement_type = movement_type or ""
 
             # Reverse the stock adjustment:
             # PURCHASE/RECEIVED added stock, so subtract it back

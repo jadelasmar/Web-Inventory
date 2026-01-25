@@ -7,7 +7,7 @@ from core.services import get_products, get_movements, get_latest_purchase_parti
 
 def render(conn):
     """Render the dashboard page."""
-    st.header("📈 Inventory Overview")
+    st.header("\U0001F4C8 Inventory Overview")
     df = get_products(conn)
     if df.empty:
         st.info("No products available")
@@ -17,8 +17,8 @@ def render(conn):
     df = df.sort_values("name", key=lambda s: s.str.casefold())
 
     # Calculate core metrics
-    total_cost = (df["current_stock"] * df["cost_price"]).sum()
-    sale_total = (df["current_stock"] * df["sale_price"]).sum()
+    total_cost = (df["current_stock"].fillna(0) * df["cost_price"].fillna(0)).sum()
+    sale_total = (df["current_stock"].fillna(0) * df["sale_price"].fillna(0)).sum()
     profit_potential = sale_total - total_cost
 
     # Row 1: Core metrics
@@ -32,12 +32,17 @@ def render(conn):
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Inventory Value (Retail)", f"${sale_total:,.2f}")
 
-    # Average profit margin %
+    # Average profit margin % (exclude zero/empty cost to avoid divide-by-zero)
     if len(df) > 0:
-        avg_margin = (
-            ((df["sale_price"] - df["cost_price"]) / df["cost_price"]) * 100
-        ).mean()
-        col2.metric("Avg Profit Margin", f"{avg_margin:.1f}%")
+        valid_cost = df["cost_price"].fillna(0) > 0
+        if valid_cost.any():
+            avg_margin = (
+                ((df.loc[valid_cost, "sale_price"] - df.loc[valid_cost, "cost_price"])
+                 / df.loc[valid_cost, "cost_price"]) * 100
+            ).mean()
+            col2.metric("Avg Profit Margin", f"{avg_margin:.1f}%")
+        else:
+            col2.metric("Avg Profit Margin", "N/A")
     else:
         col2.metric("Avg Profit Margin", "N/A")
 
@@ -69,7 +74,7 @@ def render(conn):
     col1, col2, col3, col4 = st.columns(4)
 
     # Best value product
-    df["total_value"] = df["current_stock"] * df["sale_price"]
+    df["total_value"] = df["current_stock"].fillna(0) * df["sale_price"].fillna(0)
     if len(df) > 0:
         best_product = df.loc[df["total_value"].idxmax()]
         col1.metric(
@@ -96,7 +101,7 @@ def render(conn):
     st.markdown("---")
 
     # Stock distribution by category (Pie chart)
-    st.subheader("📊 Stock Distribution by Category")
+    st.subheader("\U0001F4CA Stock Distribution by Category")
     category_stock = df.groupby("category")["current_stock"].sum().reset_index()
     category_stock = category_stock[category_stock["current_stock"] > 0]
     category_stock = category_stock.sort_values("current_stock", ascending=False)
@@ -135,12 +140,12 @@ def render(conn):
             title="Stock by Category (Top 10)",
             color_discrete_sequence=colors,
         )
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No stock data to display")
 
     # Top 10 products by value (Bar chart)
-    st.subheader("💰 Top 10 Products by Inventory Value")
+    st.subheader("\U0001F4B0 Top 10 Products by Inventory Value")
     top_10 = df.nlargest(10, "total_value")[["name", "total_value"]]
 
     if not top_10.empty:
@@ -153,12 +158,12 @@ def render(conn):
             color="total_value",
             color_continuous_scale="Viridis",
         )
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No products to display")
 
     # Recent activity (Last 5 movements)
-    st.subheader("🔄 Recent Activity")
+    st.subheader("\U0001F504 Recent Activity")
     recent_movements = get_movements(conn, days=7, types=None)
 
     if not recent_movements.empty:

@@ -6,7 +6,7 @@ from ui.components import maybe_open_image_modal, render_products_table
 
 def render(conn):
     """Render the inventory page."""
-    st.header("🗂️ Inventory")
+    st.header("\U0001F5C2\ufe0f Inventory")
     df = get_products(conn)
     party_map = get_latest_purchase_parties(conn)
     if not df.empty:
@@ -33,4 +33,4 @@ def render(conn):
             else df
         )
     maybe_open_image_modal()
-    render_products_table(df, conn)
+    render_products_table(df)

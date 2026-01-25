@@ -17,13 +17,13 @@ def render(conn):
     
     # Check permissions
     if user['role'] not in ['admin', 'owner']:
-        st.error("⛔ Access denied. This page is for admins and owners only.")
+        st.error("\u26D4 Access denied. This page is for admins and owners only.")
         return
     
-    st.title("🧑‍💻 User Management")
+    st.title("\U0001F9D1\u200D\U0001F4BB User Management")
     
     # Pending approvals section
-    st.header("🕒 Pending Approvals")
+    st.header("\U0001F552 Pending Approvals")
     pending_df = get_pending_users(conn)
     
     if pending_df.empty:
@@ -43,7 +43,7 @@ def render(conn):
                     st.caption(f"Requested: {row['created_at'][:10]}")
                 
                 with col3:
-                    if st.button("✅ Approve", key=f"approve_{row['id']}"):
+                    if st.button("\u2705 Approve", key=f"approve_{row['id']}"):
                         if approve_user(conn, row['id'], user['username']):
                             st.success(f"Approved {row['username']}")
                             st.rerun()
@@ -51,7 +51,7 @@ def render(conn):
                             st.error("Failed to approve user")
                 
                 with col4:
-                    if st.button("❌ Reject", key=f"reject_{row['id']}"):
+                    if st.button("\u274C Reject", key=f"reject_{row['id']}"):
                         if reject_user(conn, row['id']):
                             st.success(f"Rejected {row['username']}")
                             st.rerun()
@@ -61,9 +61,12 @@ def render(conn):
                 st.divider()
     
     # Active users section
-    st.header("👥 Active Users")
+    st.header("\U0001F465 Active Users")
     all_users_df = get_all_users(conn)
-    active_users = all_users_df[all_users_df['status'] == 'approved']
+    if "status" in all_users_df.columns:
+        active_users = all_users_df[all_users_df["status"] == "approved"]
+    else:
+        active_users = all_users_df.iloc[0:0]
     
     if active_users.empty:
         st.info("No active users.")
@@ -73,7 +76,7 @@ def render(conn):
                 col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
                 
                 with col1:
-                    role_emoji = "👑" if row['role'] == "owner" else "🔑" if row['role'] == "admin" else "👁️"
+                    role_emoji = "\U0001F451" if row['role'] == "owner" else "\U0001F511" if row['role'] == "admin" else "\U0001F441\ufe0f"
                     st.write(f"{role_emoji} **{row['name']}**")
                     st.caption(f"@{row['username']}")
                 
@@ -92,7 +95,7 @@ def render(conn):
                             key=f"role_{row['id']}"
                         )
                         if new_role != row['role']:
-                            if st.button("💾 Save", key=f"save_role_{row['id']}"):
+                            if st.button("\U0001F4BE Save", key=f"save_role_{row['id']}"):
                                 if update_user_role(conn, row['id'], new_role):
                                     st.success(f"Updated {row['username']} to {new_role}")
                                     st.rerun()
@@ -102,7 +105,7 @@ def render(conn):
                 with col4:
                     # Only owner can delete users
                     if user['is_owner'] and row['username'] != user['username']:
-                        if st.button("🗑️ Delete", key=f"delete_{row['id']}"):
+                        if st.button("\U0001F5D1\ufe0f Delete", key=f"delete_{row['id']}"):
                             if delete_user(conn, row['id']):
                                 st.success(f"Deleted {row['username']}")
                                 st.rerun()
@@ -114,7 +117,7 @@ def render(conn):
                 st.divider()
     
     # Statistics
-    st.header("📊 Statistics")
+    st.header("\U0001F4CA Statistics")
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Total Users", len(all_users_df))

@@ -1,10 +1,9 @@
 # ---------- db_init.py ----------
 """Create and return a database connection (PostgreSQL or SQLite).
-Schema creation is delegated to `services.init_db(conn)` to avoid 
+Schema creation is delegated to `services.init_db(conn)` to avoid
 duplicated table definitions.
 """
 import logging
-import os
 import sqlite3
 
 import streamlit as st
@@ -23,7 +22,6 @@ def init_db():
     try:
         if hasattr(st, 'secrets') and 'postgres' in st.secrets:
             import psycopg2
-            from psycopg2 import pool
             
             try:
                 # Connect to PostgreSQL (Supabase requires SSL)
@@ -42,19 +40,29 @@ def init_db():
                 conn.autocommit = False
             except Exception as e:
                 logger.exception('PostgreSQL connection failed')
-                st.error(f"⚠️ PostgreSQL connection failed: {str(e)}")
-                st.warning("📝 Check: 1) Supabase project is ACTIVE (not paused), 2) Secrets are correct, 3) Database allows connections")
+                st.error(f"\u26A0\ufe0f PostgreSQL connection failed: {str(e)}")
+                st.warning("\U0001F4DD Check: 1) Supabase project is ACTIVE (not paused), 2) Secrets are correct, 3) Database allows connections")
                 st.info("Using SQLite as fallback...")
-                conn = sqlite3.connect("data/bimpos_inventory.db", check_same_thread=False)
+                conn = _connect_sqlite()
         else:
             # Fallback to SQLite for local development
-            conn = sqlite3.connect("data/bimpos_inventory.db", check_same_thread=False)
+            conn = _connect_sqlite()
     except Exception:
         logger.exception('Database initialization fallback to SQLite')
         # If secrets file doesn't exist or any other error, use SQLite
-        conn = sqlite3.connect("data/bimpos_inventory.db", check_same_thread=False)
+        conn = _connect_sqlite()
     
     # Delegate schema creation to services.init_db
     init_schema(conn)
     return conn
+
+
+def _connect_sqlite() -> sqlite3.Connection:
+    """Create local SQLite connection (ensures data dir exists)."""
+    try:
+        import os
+        os.makedirs("data", exist_ok=True)
+    except Exception:
+        pass
+    return sqlite3.connect("data/bimpos_inventory.db", check_same_thread=False)
 

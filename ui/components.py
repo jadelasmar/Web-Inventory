@@ -31,7 +31,7 @@ def image_to_base64(image_path):
         return image_path
 
 
-def render_products_table(df, conn):
+def render_products_table(df):
     """Render products as a table with image thumbnails."""
     if df.empty:
         st.info("No products to show")
