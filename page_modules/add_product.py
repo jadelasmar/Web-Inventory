@@ -208,9 +208,13 @@ def render(conn):
         edit_name = st.text_input("Product Name *", key="edit_name")
         # Category input with suggestions from existing products
         category = _category_input(df, "edit_category")
+        if not category:
+            st.caption("Category is required. Use 'Other' if needed.")
 
         # Brand input with live suggestions and deduplication
         brand = _brand_input(df, "edit_brand")
+        if not brand:
+            st.caption("Brand is required. Use 'Other' if needed.")
         
         supplier = row.get("supplier", "")
         
@@ -269,7 +273,7 @@ def render(conn):
                 ]
             )
 
-            update_btn_disabled = not edit_name or not edit_dirty
+            update_btn_disabled = not edit_name or not category or not brand or not edit_dirty
             update_busy = st.session_state.get("update_product_busy", False)
             if st.button(
                 "\U0001F4BE Update Product",
@@ -388,9 +392,13 @@ def render(conn):
                     inactive_match = match
         # Category input with suggestions from existing products
         category = _category_input(df, "add_category")
+        if not category:
+            st.caption("Category is required. Use 'Other' if needed.")
 
         # Brand input with live suggestions and deduplication
         brand = _brand_input(df, "add_brand")
+        if not brand:
+            st.caption("Brand is required. Use 'Other' if needed.")
         
         # Add stock input for new product
         stock = st.number_input("Stock", min_value=0, key="add_stock")
@@ -412,6 +420,8 @@ def render(conn):
         # Disable add button if required fields are missing
         add_btn_disabled = (
             not name
+            or not category
+            or not brand
             or cost is None
             or sale is None
             or stock is None

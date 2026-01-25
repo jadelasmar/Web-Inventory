@@ -3,3 +3,5 @@ pandas
 plotly
 psycopg2-binary
 streamlit-free-text-select
+openpyxl
+reportlab

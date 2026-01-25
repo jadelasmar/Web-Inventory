@@ -67,7 +67,7 @@ def render_products_table(df):
             "current_stock": "Stock",
             "cost_price": "Cost",
             "sale_price": "Price",
-            "party": "Party",
+            "party": "Supplier",
             "description": "Description",
             "image_url": "Image",
         }
