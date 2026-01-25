@@ -59,3 +59,8 @@
 ## Configuration & Secrets
 - Local secrets live in `.streamlit/secrets.toml` and should not be committed.
 - PostgreSQL is used in production; SQLite is the default for local development.
+
+## Future Ideas (Backlog)
+- Bulk physical inventory adjust (upload Name/SKU + Stock and log adjustments).
+- Add SKU/Barcode field and allow lookup/import by SKU.
+- Local network deployment: static IP/DNS name for LAN access + mobile access on same Wi-Fi.
