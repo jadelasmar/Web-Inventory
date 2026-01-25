@@ -527,66 +527,6 @@ def get_latest_purchase_parties(conn: DBConnection) -> dict:
     return latest.set_index("product_name")["supplier_customer"].dropna().to_dict()
 
 
-def backfill_initial_stock_movements(conn: DBConnection) -> int:
-    """Create INITIAL STOCK movements for products with stock and no prior entry."""
-    placeholder = "%s" if is_postgres(conn) else "?"
-    cur = conn.cursor()
-    if is_postgres(conn):
-        cur.execute(
-            """
-            SELECT p.name, p.category, p.current_stock, p.cost_price
-            FROM products p
-            LEFT JOIN movements m
-              ON m.product_name = p.name AND m.movement_type = 'INITIAL STOCK'
-            WHERE COALESCE(p.current_stock, 0) > 0
-              AND COALESCE(p.isactive, 1) = 1
-              AND m.id IS NULL
-            """
-        )
-    else:
-        cur.execute(
-            """
-            SELECT p.name, p.category, p.current_stock, p.cost_price
-            FROM products p
-            LEFT JOIN movements m
-              ON m.product_name = p.name AND m.movement_type = 'INITIAL STOCK'
-            WHERE COALESCE(p.current_stock, 0) > 0
-              AND COALESCE(p.isactive, 1) = 1
-              AND m.id IS NULL
-            """
-        )
-    rows = cur.fetchall()
-    if not rows:
-        return 0
-
-    movement_date = datetime.now(LEBANON_TZ).date().isoformat()
-    placeholders_list = ", ".join([placeholder] * 8)
-    for name, category, stock, cost_price in rows:
-        cur.execute(
-            f"""
-            INSERT INTO movements (
-                product_name, product_category, movement_type, quantity, price,
-                supplier_customer, notes, movement_date
-            )
-            VALUES ({placeholders_list})
-            """,
-            (
-                name,
-                category,
-                "INITIAL STOCK",
-                int(stock or 0),
-                cost_price if cost_price is not None else None,
-                "",
-                "Backfilled from current stock",
-                movement_date,
-            ),
-        )
-    conn.commit()
-    st.session_state["movements_cache_version"] = st.session_state.get(
-        "movements_cache_version", 0
-    ) + 1
-    st.cache_data.clear()
-    return len(rows)
 
 
 def delete_movement(conn: DBConnection, movement_id: int) -> None:
