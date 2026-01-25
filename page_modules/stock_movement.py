@@ -3,10 +3,29 @@ import streamlit as st
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from core.constants import MOVEMENT_TYPES
-from core.services import get_products, get_movements, record_movement
+from core.services import (
+    get_products,
+    get_movements,
+    record_movement,
+    get_product_movement_summary,
+    upsert_initial_stock,
+)
 
 # Lebanon timezone
 LEBANON_TZ = ZoneInfo("Asia/Beirut")
+
+
+def _coerce_date(value):
+    if not value:
+        return None
+    if hasattr(value, "date"):
+        return value.date()
+    if hasattr(value, "isoformat"):
+        return value
+    try:
+        return datetime.fromisoformat(str(value)).date()
+    except Exception:
+        return None
 
 
 def render(conn):
@@ -54,30 +73,76 @@ def render(conn):
     )
     row = df[df["name"] == selected_product].iloc[0]
 
-    # Movement type is persisted per product (sorted for consistency)
-    move_types_sorted = sorted(MOVEMENT_TYPES, key=str.casefold)
-    default_mtype = (
-        "PURCHASE" if "PURCHASE" in move_types_sorted else move_types_sorted[0]
+    movement_summary = get_product_movement_summary(conn, selected_product)
+    total_movements = movement_summary.get("total_count", 0)
+    initial_id = movement_summary.get("initial_stock_id")
+    has_only_initial = total_movements == 1 and initial_id is not None
+    allow_initial = total_movements == 0 or has_only_initial
+
+    initial_key = f"initial_stock_{selected_product}"
+    if initial_key not in st.session_state:
+        st.session_state[initial_key] = False
+    if not allow_initial:
+        st.session_state[initial_key] = False
+
+    initial_checked = st.checkbox(
+        "Record as initial stock",
+        key=initial_key,
+        disabled=not allow_initial,
+        help="Only allowed before other movements exist. If initial stock is the only movement, you can edit it.",
     )
-    mtype_key = f"move_type_{selected_product}"
-    if mtype_key not in st.session_state:
-        st.session_state[mtype_key] = default_mtype
-    prev_mtype = st.session_state.get(f"_prev_{mtype_key}")
-    mtype = st.selectbox(
-        "Movement Type",
-        move_types_sorted,
-        key=mtype_key,
-    )
-    # Detect movement type change
-    if prev_mtype != mtype:
-        st.session_state[f"_prev_{mtype_key}"] = mtype
-        # If changed from PURCHASE to other, clear supplier
-        party_key = f"move_party_{selected_product}"
-        if prev_mtype == "PURCHASE" and mtype != "PURCHASE":
-            st.session_state[party_key] = ""
-        # If changed to PURCHASE, auto-fill supplier from product
-        elif mtype == "PURCHASE":
-            st.session_state[party_key] = row.get("supplier", "")
+    if not allow_initial:
+        st.caption("Initial stock is locked once other movements exist.")
+
+    if initial_checked:
+        st.text_input("Movement Type", value="INITIAL STOCK", disabled=True)
+        mtype = "INITIAL STOCK"
+        if has_only_initial:
+            initial_qty = movement_summary.get("initial_stock_qty")
+            initial_price = movement_summary.get("initial_stock_price")
+            initial_party = movement_summary.get("initial_stock_party") or ""
+            initial_notes = movement_summary.get("initial_stock_notes") or ""
+            initial_date = _coerce_date(movement_summary.get("initial_stock_date"))
+            qty_key = f"qty_{selected_product}"
+            price_key = f"move_price_{selected_product}"
+            party_key = f"move_party_{selected_product}"
+            notes_key = f"move_notes_{selected_product}"
+            date_key = f"move_date_{selected_product}"
+            if qty_key in st.session_state and not st.session_state[qty_key] and initial_qty is not None:
+                st.session_state[qty_key] = str(int(initial_qty))
+            if price_key in st.session_state and initial_price is not None:
+                st.session_state[price_key] = float(initial_price)
+            if party_key in st.session_state and not st.session_state[party_key]:
+                st.session_state[party_key] = initial_party
+            if notes_key in st.session_state and not st.session_state[notes_key]:
+                st.session_state[notes_key] = initial_notes
+            if date_key in st.session_state and initial_date is not None:
+                st.session_state[date_key] = initial_date
+    else:
+        # Movement type is persisted per product (sorted for consistency)
+        move_types_sorted = sorted(MOVEMENT_TYPES, key=str.casefold)
+        default_mtype = (
+            "PURCHASE" if "PURCHASE" in move_types_sorted else move_types_sorted[0]
+        )
+        mtype_key = f"move_type_{selected_product}"
+        if mtype_key not in st.session_state:
+            st.session_state[mtype_key] = default_mtype
+        prev_mtype = st.session_state.get(f"_prev_{mtype_key}")
+        mtype = st.selectbox(
+            "Movement Type",
+            move_types_sorted,
+            key=mtype_key,
+        )
+        # Detect movement type change
+        if prev_mtype != mtype:
+            st.session_state[f"_prev_{mtype_key}"] = mtype
+            # If changed from PURCHASE to other, clear supplier
+            party_key = f"move_party_{selected_product}"
+            if prev_mtype == "PURCHASE" and mtype != "PURCHASE":
+                st.session_state[party_key] = ""
+            # If changed to PURCHASE, auto-fill supplier from product
+            elif mtype == "PURCHASE":
+                st.session_state[party_key] = row.get("supplier", "")
 
     # Quantity (persistent per product)
     qty_key = f"qty_{selected_product}"
@@ -90,7 +155,9 @@ def render(conn):
     qty_input = st.text_input("Quantity", key=qty_key)
     try:
         qty_val = int(qty_input)
-        if mtype == "ADJUSTMENT":
+        if initial_checked:
+            valid_qty = qty_val > 0
+        elif mtype == "ADJUSTMENT":
             valid_qty = qty_val != 0
         else:
             valid_qty = qty_val > 0
@@ -196,25 +263,43 @@ def render(conn):
     ):
         st.session_state["movement_busy"] = True
         try:
-            record_movement(
-                conn,
-                (
-                    row["name"],
-                    row["category"],
-                    mtype,
-                    qty_val,
-                    price_to_log,
-                    party,
-                    notes,
-                    date,
-                ),
-            )
+            if initial_checked:
+                upsert_initial_stock(
+                    conn,
+                    product_name=row["name"],
+                    quantity=qty_val,
+                    price=price_to_log,
+                    supplier_customer=party,
+                    notes=notes,
+                    movement_date=date,
+                    movement_id=initial_id if has_only_initial else None,
+                )
+            else:
+                record_movement(
+                    conn,
+                    (
+                        row["name"],
+                        row["category"],
+                        mtype,
+                        qty_val,
+                        price_to_log,
+                        party,
+                        notes,
+                        date,
+                    ),
+                )
         except Exception as e:
             # Surface errors to the user (e.g., insufficient stock)
             st.toast(f"\u274C {e}", icon="\u26A0\ufe0f")
         else:
             # Set flag to show toast after rerun
-            msg = f"\U0001F4E6 {mtype} of {qty_val} units for {row['name']} recorded"
+            if initial_checked:
+                msg = (
+                    f"\U0001F4E6 Initial stock for {row['name']} "
+                    f"{'updated' if has_only_initial else 'recorded'}"
+                )
+            else:
+                msg = f"\U0001F4E6 {mtype} of {qty_val} units for {row['name']} recorded"
             st.session_state["movement_recorded_success"] = True
             st.session_state["movement_recorded_msg"] = msg
             st.session_state["reset_movement_form"] = True

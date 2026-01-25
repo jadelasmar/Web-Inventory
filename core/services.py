@@ -34,6 +34,127 @@ def _placeholders(conn: DBConnection, count: int) -> str:
     return ", ".join([_placeholder(conn)] * count)
 
 
+def get_product_movement_summary(conn: DBConnection, product_name: str) -> dict:
+    """Return movement counts and initial stock info for a product."""
+    placeholder = _placeholder(conn)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"SELECT COUNT(*) FROM movements WHERE product_name={placeholder}",
+            (product_name,),
+        )
+        total_count = int(cur.fetchone()[0] or 0)
+        cur.execute(
+            f"""
+            SELECT id, quantity, price, supplier_customer, notes, movement_date
+            FROM movements
+            WHERE product_name={placeholder} AND movement_type='INITIAL STOCK'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (product_name,),
+        )
+        row = cur.fetchone()
+        if row:
+            return {
+                "total_count": total_count,
+                "initial_stock_id": row[0],
+                "initial_stock_qty": row[1],
+                "initial_stock_price": row[2],
+                "initial_stock_party": row[3],
+                "initial_stock_notes": row[4],
+                "initial_stock_date": row[5],
+            }
+        return {"total_count": total_count, "initial_stock_id": None}
+    except Exception:
+        return {"total_count": 0, "initial_stock_id": None}
+
+
+def upsert_initial_stock(
+    conn: DBConnection,
+    product_name: str,
+    quantity: int,
+    price: Optional[Union[int, float, str]],
+    supplier_customer: str,
+    notes: str,
+    movement_date,
+    movement_id: Optional[int] = None,
+) -> None:
+    """Insert or update INITIAL STOCK and set product stock to quantity."""
+    placeholder = _placeholder(conn)
+    cur = conn.cursor()
+    if hasattr(movement_date, "isoformat"):
+        movement_date = movement_date.isoformat()
+    price_db = None if price in (None, "", "N/A") else float(price)
+    try:
+        cur.execute(
+            f"SELECT category, COALESCE(isactive,1) FROM products WHERE name={placeholder}",
+            (product_name,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise ValueError(f"Product not found: {product_name}")
+        category, isactive = row[0], int(row[1] or 1)
+        if isactive == 0:
+            raise ValueError(f"Product is inactive: {product_name}")
+
+        if movement_id:
+            cur.execute(
+                f"""
+                UPDATE movements
+                SET quantity={placeholder}, price={placeholder},
+                    supplier_customer={placeholder}, notes={placeholder},
+                    movement_date={placeholder}
+                WHERE id={placeholder}
+                """,
+                (
+                    int(quantity),
+                    price_db,
+                    supplier_customer,
+                    notes,
+                    movement_date,
+                    int(movement_id),
+                ),
+            )
+        else:
+            placeholders_list = _placeholders(conn, 8)
+            cur.execute(
+                f"""
+                INSERT INTO movements (product_name, product_category,
+                                     movement_type, quantity, price, supplier_customer,
+                                     notes, movement_date)
+                VALUES ({placeholders_list})
+                """,
+                (
+                    product_name,
+                    category or "",
+                    "INITIAL STOCK",
+                    int(quantity),
+                    price_db,
+                    supplier_customer,
+                    notes,
+                    movement_date,
+                ),
+            )
+
+        cur.execute(
+            f"UPDATE products SET current_stock={placeholder} WHERE name={placeholder}",
+            (int(quantity), product_name),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        st.session_state["products_cache_version"] = st.session_state.get(
+            "products_cache_version", 0
+        ) + 1
+        st.session_state["movements_cache_version"] = st.session_state.get(
+            "movements_cache_version", 0
+        ) + 1
+        st.cache_data.clear()
+
+
 def init_db(conn: DBConnection) -> None:
     """Create tables for a new database (safe to run on existing DB)."""
     is_pg = is_postgres(conn)

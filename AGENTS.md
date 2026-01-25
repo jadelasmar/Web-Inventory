@@ -12,6 +12,7 @@
   - `movements` (product_name, movement_type, quantity, price, supplier_customer, notes, movement_date)
   - `users` (username, password_hash, name, role, status, created_at, approved_by)
 - **Stock logic:** `record_movement` updates `products.current_stock` and inserts a movement; `ADJUSTMENT` supports positive or negative quantities. `delete_movement` reverses the stock effect.
+- **Initial stock:** Admins can record/edit a single INITIAL STOCK entry via the Stock Movement page; it sets `current_stock` to the entered quantity and is only allowed if there are no other movements.
 - **Soft delete:** `delete_product` sets `products.isactive=0` and hides products; `restore_product` reactivates them.
 - **Auth flow:** `core/simple_auth.py` supports:
   - bootstrap owner/admin users from secrets.toml
