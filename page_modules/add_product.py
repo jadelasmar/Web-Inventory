@@ -3,6 +3,7 @@ import streamlit as st
 import sqlite3
 from datetime import datetime
 import psycopg2
+from streamlit_free_text_select import st_free_text_select
 from core.constants import POS_CATEGORIES
 from core.services import (
     get_products,
@@ -39,24 +40,17 @@ def _category_input(df, key: str) -> str:
         if not df.empty and "category" in df.columns
         else sorted(POS_CATEGORIES, key=str.casefold)
     )
-    category_input = st.text_input("Category", key=key)
+    category_input = st_free_text_select(
+        "Category",
+        existing_categories,
+        key=key,
+        placeholder="Type to search or add",
+    )
+    category_input = (category_input or "").strip()
     category_match = next(
-        (c for c in existing_categories if c.lower() == (category_input or "").lower()),
+        (c for c in existing_categories if c.lower() == category_input.lower()),
         None,
     )
-    category_suggestions = [
-        c
-        for c in existing_categories
-        if category_input and category_input.lower() in c.lower()
-    ]
-    if category_input:
-        if category_match:
-            st.info(f"Using existing category: {category_match}")
-        else:
-            st.info("This will be a new category.")
-        if category_suggestions and not category_match:
-            st.write("Suggestions:")
-            st.write(", ".join(category_suggestions))
     return category_match if category_match else (category_input.title() if category_input else "")
 
 
@@ -67,22 +61,17 @@ def _brand_input(df, key: str) -> str:
         if not df.empty and "brand" in df.columns
         else []
     )
-    brand_input = st.text_input("Brand", key=key)
+    brand_input = st_free_text_select(
+        "Brand",
+        existing_brands,
+        key=key,
+        placeholder="Type to search or add",
+    )
+    brand_input = (brand_input or "").strip()
     brand_match = next(
-        (b for b in existing_brands if b.lower() == (brand_input or "").lower()),
+        (b for b in existing_brands if b.lower() == brand_input.lower()),
         None,
     )
-    brand_suggestions = [
-        b for b in existing_brands if brand_input and brand_input.lower() in b.lower()
-    ]
-    if brand_input:
-        if brand_match:
-            st.info(f"Will use existing brand: {brand_match}")
-        else:
-            st.info("This will be a new brand.")
-        if brand_suggestions and not brand_match:
-            st.write("Suggestions:")
-            st.write(", ".join(brand_suggestions))
     return brand_match if brand_match else brand_input
 
 
@@ -177,11 +166,15 @@ def render(conn):
                 for name in product_names_original
             ]
         
-        selected_display = st.selectbox(
+        selected_display = st_free_text_select(
             "Select Product",
             product_names_display,
             key="edit_selected",
+            placeholder="Type to search or select",
         )
+        if not selected_display or selected_display not in product_names_display:
+            st.warning("Select an existing product to edit.")
+            return
         
         # Map display name back to actual product name
         selected_index = product_names_display.index(selected_display)
@@ -364,7 +357,18 @@ def render(conn):
             del st.session_state["product_added_name"]
             st.session_state.pop("add_product_busy", None)
 
-        name = st.text_input("Product Name *", key="add_name")
+        existing_names = (
+            df["name"].dropna().astype(str).tolist()
+            if not df.empty and "name" in df.columns
+            else []
+        )
+        name = st_free_text_select(
+            "Product Name *",
+            existing_names,
+            key="add_name",
+            placeholder="Type to search or add",
+        )
+        name = (name or "").strip()
         inactive_match = None
         active_exists = False
         active_names = set()

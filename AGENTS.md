@@ -11,6 +11,7 @@
   - `products` (name, category, brand, description, image_url, current_stock, cost_price, sale_price, supplier, isactive)
   - `movements` (product_name, movement_type, quantity, price, supplier_customer, notes, movement_date)
   - `users` (username, password_hash, name, role, status, created_at, approved_by)
+  - `parties` (name, party_type, isactive, created_at)
 - **Stock logic:** `record_movement` updates `products.current_stock` and inserts a movement; `ADJUSTMENT` supports positive or negative quantities. `delete_movement` reverses the stock effect.
 - **Initial stock:** Admins can record/edit a single INITIAL STOCK entry via the Stock Movement page; it sets `current_stock` to the entered quantity and is only allowed if there are no other movements.
 - **Soft delete:** `delete_product` sets `products.isactive=0` and hides products; `restore_product` reactivates them.
@@ -22,6 +23,8 @@
 - **Caching:** `get_products` and `get_movements` use `st.cache_data`; cache invalidated via `products_cache_version` / `movements_cache_version` in session state.
 - **Images:** Local product images live in `assets/product_images/` and are auto-resolved by product name; renames attempt to rename local files.
 - **Encoding:** UI emoji are represented with Unicode escape sequences in code to avoid encoding issues on Windows consoles.
+- **Parties:** New parties are auto-added from Stock Movement. Admins manage/rename/delete in the Customers & Suppliers page.
+- **UI components:** Uses `streamlit-free-text-select` for single-field select-or-create inputs (party, brand, category, product).
 
 ## Project Structure
 - `app.py` is the Streamlit entry point.

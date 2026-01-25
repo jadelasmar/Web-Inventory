@@ -9,6 +9,7 @@ from core.constants import (
     MENU_MOVEMENTS,
     MENU_ADD_PRODUCT,
     MENU_STOCK_MOVEMENT,
+    MENU_PARTIES,
     MENU_USER_MANAGEMENT,
 )
 from core.simple_auth import login_form, require_auth, get_current_user
@@ -22,7 +23,7 @@ logging.basicConfig(
 )
 
 # Import page render functions
-from page_modules import dashboard, inventory, add_product, stock_movement, alerts, movements, user_management
+from page_modules import dashboard, inventory, add_product, stock_movement, alerts, movements, user_management, parties
 
 # Page configuration
 st.set_page_config(
@@ -74,6 +75,7 @@ pages = {
 if st.session_state.admin_mode:
     pages[MENU_ADD_PRODUCT] = lambda: add_product.render(conn)
     pages[MENU_STOCK_MOVEMENT] = lambda: stock_movement.render(conn)
+    pages[MENU_PARTIES] = lambda: parties.render(conn)
     pages[MENU_USER_MANAGEMENT] = lambda: user_management.render(conn)
 
 # Render selected page

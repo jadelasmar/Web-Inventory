@@ -2,10 +2,13 @@
 import streamlit as st
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from streamlit_free_text_select import st_free_text_select
 from core.constants import MOVEMENT_TYPES
 from core.services import (
     get_products,
     get_movements,
+    get_parties,
+    upsert_party,
     record_movement,
     get_product_movement_summary,
     upsert_initial_stock,
@@ -66,11 +69,16 @@ def render(conn):
     df = df.sort_values("name", key=lambda s: s.str.casefold())
 
     # Persist selected product across navigation
-    selected_product = st.selectbox(
+    product_options = df["name"].tolist()
+    selected_product = st_free_text_select(
         "Product",
-        df["name"],
+        product_options,
         key="move_selected",
+        placeholder="Type to search or select",
     )
+    if not selected_product or selected_product not in product_options:
+        st.warning("Select an existing product to continue.")
+        return
     row = df[df["name"] == selected_product].iloc[0]
 
     movement_summary = get_product_movement_summary(conn, selected_product)
@@ -187,7 +195,13 @@ def render(conn):
     # For ADJUSTMENT, treat price as 'NA' in movement log
     price_to_log = price if not price_disabled else "N/A"
 
-    # Party with dropdown of known parties (from products + movements)
+    # Party with dropdown of known parties (from parties + products + movements)
+    parties_df = get_parties(conn, include_inactive=False)
+    parties_from_table = (
+        set(parties_df["name"].dropna().unique())
+        if not parties_df.empty and "name" in parties_df.columns
+        else set()
+    )
     parties_from_products = (
         set(df["supplier"].dropna().unique())
         if not df.empty and "supplier" in df.columns
@@ -200,7 +214,7 @@ def render(conn):
         else set()
     )
     existing_parties = sorted(
-        {p for p in (parties_from_products | parties_from_movements) if str(p).strip()},
+        {p for p in (parties_from_table | parties_from_products | parties_from_movements) if str(p).strip()},
         key=str.casefold,
     )
     party_key = f"move_party_{selected_product}"
@@ -220,24 +234,16 @@ def render(conn):
                 .get("supplier_customer", "")
             )
     
-    if existing_parties:
-        party_options = existing_parties + ["Add new..."]
-        # Auto-fill party if movement type is PURCHASE
-        if mtype == "PURCHASE" and not st.session_state.get(f"{party_key}_choice"):
-            if last_purchase_party in party_options:
-                st.session_state[f"{party_key}_choice"] = last_purchase_party
-        
-        party_choice = st.selectbox(
-            "Party",
-            party_options,
-            key=f"{party_key}_choice",
-        )
-        if party_choice == "Add new...":
-            party = st.text_input("Enter new party", key=party_key)
-        else:
-            party = party_choice
-    else:
-        party = st.text_input("Party", key=party_key)
+    party_options = existing_parties
+    if mtype == "PURCHASE" and last_purchase_party and last_purchase_party not in party_options:
+        party_options = [last_purchase_party] + party_options
+    party = st_free_text_select(
+        "Party",
+        party_options,
+        key=party_key,
+        placeholder="Type to search or add",
+    )
+    party = (party or "").strip()
 
     notes_key = f"move_notes_{selected_product}"
     notes = st.text_area("Notes", key=notes_key)
@@ -263,6 +269,14 @@ def render(conn):
     ):
         st.session_state["movement_busy"] = True
         try:
+            if party:
+                if mtype == "PURCHASE":
+                    inferred_type = "Supplier"
+                elif mtype in ("SALE", "ISSUED"):
+                    inferred_type = "Customer"
+                else:
+                    inferred_type = "Other"
+                upsert_party(conn, party, inferred_type)
             if initial_checked:
                 upsert_initial_stock(
                     conn,

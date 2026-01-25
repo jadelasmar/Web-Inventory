@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from datetime import datetime
 from typing import Iterable, Optional, Union
 
 import pandas as pd
@@ -214,6 +215,24 @@ def init_db(conn: DBConnection) -> None:
         )
         """
     )
+    # Normalize usernames to lowercase for consistency
+    try:
+        cur.execute("UPDATE users SET username = LOWER(username) WHERE username IS NOT NULL")
+    except Exception:
+        pass
+
+    # Parties table for suppliers/customers
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS parties (
+            id {id_type},
+            name TEXT UNIQUE NOT NULL,
+            party_type TEXT DEFAULT 'Other',
+            isactive INTEGER DEFAULT 1,
+            created_at TEXT
+        )
+        """
+    )
     
     # Add foreign key for PostgreSQL (SQLite doesn't enforce it by default)
     if is_pg:
@@ -277,6 +296,64 @@ def init_db(conn: DBConnection) -> None:
                 cur.execute(
                     "ALTER TABLE products ADD COLUMN brand TEXT"
                 )
+    except Exception:
+        pass
+
+    # Schema migrations: ensure parties columns exist
+    try:
+        if is_pg:
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='parties' AND column_name='party_type'
+            """)
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE parties ADD COLUMN party_type TEXT DEFAULT 'Other'"
+                )
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='parties' AND column_name='isactive'
+            """)
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE parties ADD COLUMN isactive INTEGER DEFAULT 1"
+                )
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='parties' AND column_name='created_at'
+            """)
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE parties ADD COLUMN created_at TEXT"
+                )
+        else:
+            cur.execute("PRAGMA table_info(parties)")
+            cols = [r[1] for r in cur.fetchall()]
+            if "party_type" not in cols:
+                cur.execute(
+                    "ALTER TABLE parties ADD COLUMN party_type TEXT DEFAULT 'Other'"
+                )
+            if "isactive" not in cols:
+                cur.execute(
+                    "ALTER TABLE parties ADD COLUMN isactive INTEGER DEFAULT 1"
+                )
+            if "created_at" not in cols:
+                cur.execute(
+                    "ALTER TABLE parties ADD COLUMN created_at TEXT"
+                )
+    except Exception:
+        pass
+
+    # Normalize party types to title case and drop legacy "both"
+    try:
+        if is_pg:
+            cur.execute("UPDATE parties SET party_type='Supplier' WHERE LOWER(party_type)='supplier'")
+            cur.execute("UPDATE parties SET party_type='Customer' WHERE LOWER(party_type)='customer'")
+            cur.execute("UPDATE parties SET party_type='Other' WHERE LOWER(party_type) IN ('other','both') OR party_type IS NULL")
+        else:
+            cur.execute("UPDATE parties SET party_type='Supplier' WHERE LOWER(party_type)='supplier'")
+            cur.execute("UPDATE parties SET party_type='Customer' WHERE LOWER(party_type)='customer'")
+            cur.execute("UPDATE parties SET party_type='Other' WHERE LOWER(party_type) IN ('other','both') OR party_type IS NULL")
     except Exception:
         pass
     
@@ -650,6 +727,167 @@ def get_latest_purchase_parties(conn: DBConnection) -> dict:
     if "supplier_customer" not in latest.columns:
         return {}
     return latest.set_index("product_name")["supplier_customer"].dropna().to_dict()
+
+
+def get_parties(conn: DBConnection, include_inactive: bool = False) -> pd.DataFrame:
+    """Return parties list as DataFrame."""
+    try:
+        _ensure_parties_table(conn)
+        if include_inactive:
+            return pd.read_sql("SELECT * FROM parties", conn)
+        return pd.read_sql("SELECT * FROM parties WHERE isactive=1", conn)
+    except Exception:
+        return pd.DataFrame()
+
+
+def _merge_party_type(existing: str, incoming: str) -> str:
+    if not existing:
+        return incoming or "Other"
+    if existing == incoming:
+        return existing
+    if existing in ("Supplier", "Customer") and incoming == "Other":
+        return existing
+    if incoming in ("Supplier", "Customer") and existing == "Other":
+        return incoming
+    # If conflicting (Supplier vs Customer), keep existing and let admin decide.
+    return existing
+
+
+def _normalize_party_type(value: str) -> str:
+    if not value:
+        return "Other"
+    value = str(value).strip().lower()
+    if value == "supplier":
+        return "Supplier"
+    if value == "customer":
+        return "Customer"
+    return "Other"
+
+
+def upsert_party(conn: DBConnection, name: str, party_type: str = "Other") -> None:
+    """Insert party if missing; merge type if exists."""
+    if not name or not str(name).strip():
+        return
+    _ensure_parties_table(conn)
+    party_name = str(name).strip()
+    placeholder = _placeholder(conn)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"SELECT id, party_type FROM parties WHERE LOWER(name) = {placeholder}",
+            (party_name.lower(),),
+        )
+        row = cur.fetchone()
+        if row:
+            party_id, existing_type = row[0], row[1]
+            merged_type = _merge_party_type(
+                _normalize_party_type(existing_type), _normalize_party_type(party_type)
+            )
+            cur.execute(
+                f"UPDATE parties SET party_type={placeholder}, isactive=1 WHERE id={placeholder}",
+                (merged_type, party_id),
+            )
+        else:
+            placeholders_list = _placeholders(conn, 4)
+            cur.execute(
+                f"""
+                INSERT INTO parties (name, party_type, isactive, created_at)
+                VALUES ({placeholders_list})
+                """,
+                (
+                    party_name,
+                    _normalize_party_type(party_type),
+                    1,
+                    datetime.now().isoformat(),
+                ),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def update_party_name(conn: DBConnection, old_name: str, new_name: str) -> None:
+    """Rename a party and update linked text fields in products/movements."""
+    if not old_name or not new_name:
+        return
+    _ensure_parties_table(conn)
+    old_name = str(old_name).strip()
+    new_name = str(new_name).strip()
+    placeholder = _placeholder(conn)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"SELECT id FROM parties WHERE LOWER(name)={placeholder}",
+            (old_name.lower(),),
+        )
+        row = cur.fetchone()
+        if not row:
+            return
+        party_id = row[0]
+        # ensure new name doesn't collide
+        cur.execute(
+            f"SELECT id FROM parties WHERE LOWER(name)={placeholder}",
+            (new_name.lower(),),
+        )
+        existing = cur.fetchone()
+        if existing and existing[0] != party_id:
+            raise ValueError("Party name already exists")
+
+        cur.execute(
+            f"UPDATE parties SET name={placeholder} WHERE id={placeholder}",
+            (new_name, party_id),
+        )
+        cur.execute(
+            f"UPDATE products SET supplier={placeholder} WHERE supplier={placeholder}",
+            (new_name, old_name),
+        )
+        cur.execute(
+            f"UPDATE movements SET supplier_customer={placeholder} WHERE supplier_customer={placeholder}",
+            (new_name, old_name),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def deactivate_party(conn: DBConnection, name: str) -> None:
+    """Soft-delete a party (keeps movements intact)."""
+    _ensure_parties_table(conn)
+    placeholder = _placeholder(conn)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"UPDATE parties SET isactive=0 WHERE LOWER(name)={placeholder}",
+            (str(name).strip().lower(),),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _ensure_parties_table(conn: DBConnection) -> None:
+    """Create parties table if missing (safe no-op for existing table)."""
+    cur = conn.cursor()
+    is_pg = is_postgres(conn)
+    id_type = "SERIAL PRIMARY KEY" if is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    try:
+        cur.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS parties (
+                id {id_type},
+                name TEXT UNIQUE NOT NULL,
+                party_type TEXT DEFAULT 'Other',
+                isactive INTEGER DEFAULT 1,
+                created_at TEXT
+            )
+            """
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
 
 
 

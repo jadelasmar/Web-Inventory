@@ -12,14 +12,14 @@ def apply_mobile_styles():
     }
     
     section[data-testid="stSidebar"][aria-expanded="false"] {
-        margin-left: -15rem !important;
+        margin-left: -18rem !important;
     }
     
     /* Fix sidebar width */
     section[data-testid="stSidebar"] {
-        width: 15rem !important;
-        min-width: 15rem !important;
-        max-width: 15rem !important;
+        width: 18rem !important;
+        min-width: 18rem !important;
+        max-width: 18rem !important;
     }
     
     /* Hide only the resize handle cursor */

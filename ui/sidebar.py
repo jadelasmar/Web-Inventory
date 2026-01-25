@@ -9,6 +9,7 @@ from core.constants import (
     MENU_MOVEMENTS,
     MENU_ADD_PRODUCT,
     MENU_STOCK_MOVEMENT,
+    MENU_PARTIES,
     MENU_USER_MANAGEMENT,
 )
 
@@ -56,6 +57,7 @@ def render_sidebar_menu():
         # Only show admin pages if admin_mode is enabled
         menu.insert(1, MENU_ADD_PRODUCT)
         menu.insert(2, MENU_STOCK_MOVEMENT)
+        menu.append(MENU_PARTIES)
         menu.append(MENU_USER_MANAGEMENT)
     if (
         "menu_selection" not in st.session_state

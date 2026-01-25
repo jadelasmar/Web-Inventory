@@ -86,13 +86,14 @@ def get_bootstrap_users():
 def get_db_user(conn, username: str):
     """Get user from database."""
     cur = conn.cursor()
+    username = (username or "").strip()
     try:
         # Check if we're using PostgreSQL or SQLite
         from core.services import is_postgres
         if is_postgres(conn):
-            cur.execute("SELECT username, password_hash, name, role, status FROM users WHERE username = %s", (username,))
+            cur.execute("SELECT username, password_hash, name, role, status FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
         else:
-            cur.execute("SELECT username, password_hash, name, role, status FROM users WHERE username = ?", (username,))
+            cur.execute("SELECT username, password_hash, name, role, status FROM users WHERE LOWER(username) = LOWER(?)", (username,))
         
         row = cur.fetchone()
         if row:
@@ -112,14 +113,17 @@ def verify_login(conn, username: str, password: str) -> tuple:
     """Verify login credentials from database or bootstrap users.
     Returns: (success: bool, name: str, role: str)
     """
+    username = (username or "").strip()
     password_hash = hash_password(password)
     
     # First check bootstrap users from secrets.toml (for owner access)
     bootstrap_users = get_bootstrap_users()
-    if username in bootstrap_users:
-        user = bootstrap_users[username]
-        if password_hash == user['password_hash']:
-            return True, user['name'], user['role']
+    if username:
+        for key, user in bootstrap_users.items():
+            if key.lower() == username.lower():
+                if password_hash == user['password_hash']:
+                    return True, user['name'], user['role']
+                break
     
     # Then check database users
     user = get_db_user(conn, username)
@@ -138,6 +142,7 @@ def signup_user(conn, username: str, password: str, name: str) -> tuple:
     """Create new pending user account.
     Returns: (success: bool, message: str)
     """
+    username = (username or "").strip()
     if not username or not password or not name:
         return False, "All fields are required"
     
@@ -149,8 +154,9 @@ def signup_user(conn, username: str, password: str, name: str) -> tuple:
     
     # Check if username exists in bootstrap users
     bootstrap_users = get_bootstrap_users()
-    if username in bootstrap_users:
-        return False, "Username already exists"
+    for key in bootstrap_users.keys():
+        if key.lower() == username.lower():
+            return False, "Username already exists"
     
     # Check if username exists in database
     if get_db_user(conn, username):
@@ -166,12 +172,12 @@ def signup_user(conn, username: str, password: str, name: str) -> tuple:
         if is_postgres(conn):
             cur.execute(
                 "INSERT INTO users (username, password_hash, name, role, status, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                (username, password_hash, name, 'viewer', 'pending', created_at)
+                (username.lower(), password_hash, name, 'viewer', 'pending', created_at)
             )
         else:
             cur.execute(
                 "INSERT INTO users (username, password_hash, name, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (username, password_hash, name, 'viewer', 'pending', created_at)
+                (username.lower(), password_hash, name, 'viewer', 'pending', created_at)
             )
         conn.commit()
         return True, "Account created! Waiting for admin approval."
@@ -237,7 +243,6 @@ def login_form(conn):
                     success, message = signup_user(conn, new_username, new_password, new_name)
                     if success:
                         st.success(f"\u2705 {message}")
-                        st.info("Please wait for admin approval before logging in.")
                     else:
                         st.error(f"\u274C {message}")
         
