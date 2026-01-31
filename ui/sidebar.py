@@ -74,7 +74,7 @@ def render_sidebar_menu():
     st.sidebar.caption(f"Role: {user['role'].title()}")
     
     # Logout button
-    if st.sidebar.button("\U0001F6AA Logout", use_container_width=True):
+    if st.sidebar.button("\U0001F6AA Logout", width="stretch"):
         logout()
         st.rerun()
     

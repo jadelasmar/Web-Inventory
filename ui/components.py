@@ -87,7 +87,7 @@ def render_products_table(df):
 
     st.dataframe(
         display_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config=column_config,
     )

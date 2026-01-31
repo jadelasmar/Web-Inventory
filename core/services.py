@@ -15,6 +15,14 @@ try:
     import psycopg2.extensions
 except ImportError:
     psycopg2 = None
+try:
+    import sqlalchemy
+    from sqlalchemy import create_engine
+    from sqlalchemy.engine import URL
+except ImportError:
+    sqlalchemy = None
+    create_engine = None
+    URL = None
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +41,41 @@ def _placeholder(conn: DBConnection) -> str:
 
 def _placeholders(conn: DBConnection, count: int) -> str:
     return ", ".join([_placeholder(conn)] * count)
+
+
+def _get_sqlalchemy_engine():
+    if sqlalchemy is None or create_engine is None or URL is None:
+        return None
+    if not hasattr(st, "secrets") or "postgres" not in st.secrets:
+        return None
+    cache_key = "_sqlalchemy_engine"
+    engine = st.session_state.get(cache_key)
+    if engine is not None:
+        return engine
+    pg = st.secrets["postgres"]
+    try:
+        url = URL.create(
+            "postgresql+psycopg2",
+            username=pg.get("user"),
+            password=pg.get("password"),
+            host=pg.get("host"),
+            port=int(pg.get("port", 5432)),
+            database=pg.get("database"),
+            query={"sslmode": "require"},
+        )
+    except Exception:
+        return None
+    engine = create_engine(url, pool_pre_ping=True)
+    st.session_state[cache_key] = engine
+    return engine
+
+
+def _read_sql(conn: DBConnection, query: str, params: Optional[Iterable] = None) -> pd.DataFrame:
+    if is_postgres(conn):
+        engine = _get_sqlalchemy_engine()
+        if engine is not None:
+            return pd.read_sql(query, engine, params=params or None)
+    return pd.read_sql(query, conn, params=params or None)
 
 
 def get_product_movement_summary(conn: DBConnection, product_name: str) -> dict:
@@ -641,7 +684,7 @@ def get_products(
         try:
             if include_inactive:
                 query = "SELECT * FROM products"
-                return pd.read_sql(query, conn)
+                return _read_sql(conn, query)
 
             # Prefer to filter by `isactive` when present; detect column existence
             cur = conn.cursor()
@@ -664,7 +707,7 @@ def get_products(
                 # Older DB without isactive -- return all rows (can't filter)
                 query = "SELECT * FROM products"
 
-            return pd.read_sql(query, conn)
+            return _read_sql(conn, query)
         except Exception as e:
             logger.error(f"Error fetching products: {e}")
             return pd.DataFrame()
@@ -701,7 +744,7 @@ def get_movements(
             query += f" AND movement_type IN ({placeholders})"
             params.extend(types_tuple)
         try:
-            return pd.read_sql(query, conn, params=params or None)
+            return _read_sql(conn, query, params=params)
         except Exception as e:
             logger.exception("Failed to read movements: %s", e)
             return pd.DataFrame()
@@ -734,8 +777,8 @@ def get_parties(conn: DBConnection, include_inactive: bool = False) -> pd.DataFr
     try:
         _ensure_parties_table(conn)
         if include_inactive:
-            return pd.read_sql("SELECT * FROM parties", conn)
-        return pd.read_sql("SELECT * FROM parties WHERE isactive=1", conn)
+            return _read_sql(conn, "SELECT * FROM parties")
+        return _read_sql(conn, "SELECT * FROM parties WHERE isactive=1")
     except Exception:
         return pd.DataFrame()
 
@@ -957,7 +1000,7 @@ def get_all_users(conn: DBConnection) -> pd.DataFrame:
     """Get all users from database."""
     try:
         query = "SELECT id, username, name, role, status, created_at, approved_by FROM users ORDER BY created_at DESC"
-        return pd.read_sql(query, conn)
+        return _read_sql(conn, query)
     except Exception as e:
         logger.exception("Failed to read users: %s", e)
         return pd.DataFrame()
@@ -967,7 +1010,7 @@ def get_pending_users(conn: DBConnection) -> pd.DataFrame:
     """Get all pending users."""
     try:
         query = "SELECT id, username, name, role, created_at FROM users WHERE status = 'pending' ORDER BY created_at ASC"
-        return pd.read_sql(query, conn)
+        return _read_sql(conn, query)
     except Exception as e:
         logger.exception("Failed to read pending users: %s", e)
         return pd.DataFrame()

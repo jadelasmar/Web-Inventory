@@ -146,7 +146,7 @@ def render(conn):
                 return
             import_df = import_df[required_cols]
             import_df = import_df.fillna("")
-            st.dataframe(import_df.head(25), use_container_width=True, hide_index=True)
+            st.dataframe(import_df.head(25), width="stretch", hide_index=True)
 
             if st.button("Import products"):
                 current_df = get_products(conn, include_inactive=True)

@@ -140,7 +140,7 @@ def render(conn):
             title="Stock by Category (Top 10)",
             color_discrete_sequence=colors,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No stock data to display")
 
@@ -158,7 +158,7 @@ def render(conn):
             color="total_value",
             color_continuous_scale="Viridis",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No products to display")
 
@@ -190,6 +190,6 @@ def render(conn):
             recent_movements["Date"] = date_series.dt.strftime("%d/%m/%Y").fillna(
                 raw_dates.fillna("").astype(str)
             )
-        st.dataframe(recent_movements, use_container_width=True, hide_index=True)
+        st.dataframe(recent_movements, width="stretch", hide_index=True)
     else:
         st.info("No recent activity")

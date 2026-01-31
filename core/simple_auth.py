@@ -199,7 +199,7 @@ def login_form(conn):
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
             remember_me = st.checkbox("Remember me on this device", value=True)
-            submit = st.form_submit_button("Login", use_container_width=True)
+            submit = st.form_submit_button("Login", width="stretch")
             
             if submit:
                 if username and password:
@@ -234,7 +234,7 @@ def login_form(conn):
             new_name = st.text_input("Full Name", key="signup_name")
             new_password = st.text_input("Choose Password", type="password", key="signup_password")
             confirm_password = st.text_input("Confirm Password", type="password", key="signup_confirm")
-            signup_submit = st.form_submit_button("Sign Up", use_container_width=True)
+            signup_submit = st.form_submit_button("Sign Up", width="stretch")
             
             if signup_submit:
                 if new_password != confirm_password:

@@ -1,5 +1,6 @@
 streamlit
 pandas
+sqlalchemy
 plotly
 psycopg2-binary
 streamlit-free-text-select

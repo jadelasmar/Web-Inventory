@@ -109,7 +109,7 @@ def render(conn):
     df_display = df_display[move_cols]
     
     # Display movement log (left-aligned by default)
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    st.dataframe(df_display, width="stretch", hide_index=True)
     
     # Owner can delete movements - add delete buttons below table
     user = get_current_user()

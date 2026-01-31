@@ -285,7 +285,7 @@ def render(conn):
             update_busy = st.session_state.get("update_product_busy", False)
             if st.button(
                 "\U0001F4BE Update Product",
-                use_container_width=True,
+                width="stretch",
                 disabled=update_btn_disabled or update_busy,
             ):
                 st.session_state["update_product_busy"] = True
@@ -338,13 +338,13 @@ def render(conn):
                 is_active = product.get("isactive", 1) == 1
                 
                 if is_active:
-                    if st.button("\U0001F5D1\ufe0f Delete", use_container_width=True):
+                    if st.button("\U0001F5D1\ufe0f Delete", width="stretch"):
                         delete_product(conn, selected)
                         st.session_state["product_deleted_success"] = True
                         st.session_state["product_deleted_name"] = selected
                         st.rerun()
                 else:
-                    if st.button("\u267B\ufe0f Restore", use_container_width=True):
+                    if st.button("\u267B\ufe0f Restore", width="stretch"):
                         restore_product(conn, selected)
                         st.session_state["product_restored_success"] = True
                         st.session_state["product_restored_name"] = selected
