@@ -155,30 +155,38 @@ def render(conn):
             del st.session_state["product_updated_name"]
             st.session_state.pop("update_product_busy", None)
 
-        # Add indicator for inactive products (Owner only)
+        # Add indicator for inactive products (Owner only) and show brand/category
         user = get_current_user()
-        product_names_original = df["name"].tolist()
-        product_names_display = product_names_original.copy()
-        
-        if user['role'] == 'owner' and "isactive" in df.columns:
-            product_names_display = [
-                f"{name} {'\u2705' if df[df['name']==name].iloc[0]['isactive']==1 else '\u274C (Inactive)'}"
-                for name in product_names_original
-            ]
-        
+        display_to_name = {}
+        product_names_display = []
+        for _, product in df.iterrows():
+            name = str(product.get("name", "")).strip()
+            brand = str(product.get("brand", "") or "").strip()
+            category = str(product.get("category", "") or "").strip()
+            parts = [part for part in (name, brand, category) if part]
+            display = " | ".join(parts) if parts else name
+            if user["role"] == "owner" and "isactive" in df.columns:
+                is_active = int(product.get("isactive", 1) or 1) == 1
+                display = f"{display} {'\u2705' if is_active else '\u274C (Inactive)'}"
+            product_names_display.append(display)
+            display_to_name[display.lower()] = name
+
         selected_display = st_free_text_select(
             "Select Product",
             product_names_display,
             key="edit_selected",
             placeholder="Type to search or select",
         )
-        if not selected_display or selected_display not in product_names_display:
+        if not selected_display:
             st.warning("Select an existing product to edit.")
             return
-        
+
         # Map display name back to actual product name
-        selected_index = product_names_display.index(selected_display)
-        selected = product_names_original[selected_index]
+        selected_key = str(selected_display).strip().lower()
+        if selected_key not in display_to_name:
+            st.warning("Select an existing product to edit.")
+            return
+        selected = display_to_name[selected_key]
         row = df[df["name"] == selected].iloc[0]
 
         # When selected product changes (or first load), initialize/edit fields from DB

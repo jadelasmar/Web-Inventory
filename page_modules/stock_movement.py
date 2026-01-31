@@ -69,25 +69,42 @@ def render(conn):
     df = df.sort_values("name", key=lambda s: s.str.casefold())
 
     # Persist selected product across navigation
-    product_options = df["name"].tolist()
+    display_to_name = {}
+    display_options = []
+    for _, product in df.iterrows():
+        name = str(product.get("name", "")).strip()
+        brand = str(product.get("brand", "") or "").strip()
+        category = str(product.get("category", "") or "").strip()
+        parts = [part for part in (name, brand, category) if part]
+        display = " | ".join(parts) if parts else name
+        display_options.append(display)
+        display_to_name[display.lower()] = name
+
     selected_product = st_free_text_select(
         "Product",
-        product_options,
+        display_options,
         key="move_selected",
         placeholder="Type to search or select",
     )
-    if not selected_product or selected_product not in product_options:
+    if not selected_product:
         st.warning("Select an existing product to continue.")
         return
-    row = df[df["name"] == selected_product].iloc[0]
 
-    movement_summary = get_product_movement_summary(conn, selected_product)
+    selected_key = str(selected_product).strip().lower()
+    if selected_key in display_to_name:
+        selected_name = display_to_name[selected_key]
+    else:
+        st.warning("Select an existing product to continue.")
+        return
+    row = df[df["name"] == selected_name].iloc[0]
+
+    movement_summary = get_product_movement_summary(conn, selected_name)
     total_movements = movement_summary.get("total_count", 0)
     initial_id = movement_summary.get("initial_stock_id")
     has_only_initial = total_movements == 1 and initial_id is not None
     allow_initial = total_movements == 0 or has_only_initial
 
-    initial_key = f"initial_stock_{selected_product}"
+    initial_key = f"initial_stock_{selected_name}"
     if initial_key not in st.session_state:
         st.session_state[initial_key] = False
     if not allow_initial:
@@ -111,11 +128,11 @@ def render(conn):
             initial_party = movement_summary.get("initial_stock_party") or ""
             initial_notes = movement_summary.get("initial_stock_notes") or ""
             initial_date = _coerce_date(movement_summary.get("initial_stock_date"))
-            qty_key = f"qty_{selected_product}"
-            price_key = f"move_price_{selected_product}"
-            party_key = f"move_party_{selected_product}"
-            notes_key = f"move_notes_{selected_product}"
-            date_key = f"move_date_{selected_product}"
+            qty_key = f"qty_{selected_name}"
+            price_key = f"move_price_{selected_name}"
+            party_key = f"move_party_{selected_name}"
+            notes_key = f"move_notes_{selected_name}"
+            date_key = f"move_date_{selected_name}"
             if qty_key in st.session_state and not st.session_state[qty_key] and initial_qty is not None:
                 st.session_state[qty_key] = str(int(initial_qty))
             if price_key in st.session_state and initial_price is not None:
@@ -132,7 +149,7 @@ def render(conn):
         default_mtype = (
             "PURCHASE" if "PURCHASE" in move_types_sorted else move_types_sorted[0]
         )
-        mtype_key = f"move_type_{selected_product}"
+        mtype_key = f"move_type_{selected_name}"
         if mtype_key not in st.session_state:
             st.session_state[mtype_key] = default_mtype
         prev_mtype = st.session_state.get(f"_prev_{mtype_key}")
@@ -145,7 +162,7 @@ def render(conn):
         if prev_mtype != mtype:
             st.session_state[f"_prev_{mtype_key}"] = mtype
             # If changed from PURCHASE to other, clear supplier
-            party_key = f"move_party_{selected_product}"
+            party_key = f"move_party_{selected_name}"
             if prev_mtype == "PURCHASE" and mtype != "PURCHASE":
                 st.session_state[party_key] = ""
             # If changed to PURCHASE, auto-fill supplier from product
@@ -153,7 +170,7 @@ def render(conn):
                 st.session_state[party_key] = row.get("supplier", "")
 
     # Quantity (persistent per product)
-    qty_key = f"qty_{selected_product}"
+    qty_key = f"qty_{selected_name}"
     clear_flag = f"clear_{qty_key}"
     if st.session_state.get(clear_flag):
         st.session_state[qty_key] = ""
@@ -185,7 +202,7 @@ def render(conn):
 
     # Other fields persisted per product
 
-    price_key = f"move_price_{selected_product}"
+    price_key = f"move_price_{selected_name}"
     price_disabled = mtype == "ADJUSTMENT"
     if price_key not in st.session_state or price_disabled:
         st.session_state[price_key] = 0.0 if not price_disabled else 0.0
@@ -217,11 +234,11 @@ def render(conn):
         {p for p in (parties_from_table | parties_from_products | parties_from_movements) if str(p).strip()},
         key=str.casefold,
     )
-    party_key = f"move_party_{selected_product}"
+    party_key = f"move_party_{selected_name}"
     last_purchase_party = ""
     if not movements_df.empty and "product_name" in movements_df.columns:
         purchase_rows = movements_df[
-            (movements_df["product_name"] == selected_product)
+            (movements_df["product_name"] == selected_name)
             & (movements_df["movement_type"] == "PURCHASE")
         ]
         if not purchase_rows.empty:
@@ -245,10 +262,10 @@ def render(conn):
     )
     party = (party or "").strip()
 
-    notes_key = f"move_notes_{selected_product}"
+    notes_key = f"move_notes_{selected_name}"
     notes = st.text_area("Notes", key=notes_key)
 
-    date_key = f"move_date_{selected_product}"
+    date_key = f"move_date_{selected_name}"
     if date_key in st.session_state:
         date = st.date_input(
             "Date",
@@ -317,7 +334,7 @@ def render(conn):
             st.session_state["movement_recorded_success"] = True
             st.session_state["movement_recorded_msg"] = msg
             st.session_state["reset_movement_form"] = True
-            st.session_state["reset_movement_product"] = selected_product
+            st.session_state["reset_movement_product"] = selected_name
             st.session_state["movement_busy"] = False
             st.rerun()
         st.session_state["movement_busy"] = False
