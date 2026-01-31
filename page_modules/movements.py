@@ -1,4 +1,5 @@
 """Movement log page to view transaction history."""
+import pandas as pd
 import streamlit as st
 from core.constants import MOVEMENT_TYPES
 from core.services import get_movements, delete_movement
@@ -7,6 +8,12 @@ from core.simple_auth import get_current_user
 
 def render(conn):
     """Render the movement log page."""
+    def _format_date_value(value):
+        dt = pd.to_datetime(value, errors="coerce")
+        if pd.isna(dt):
+            return "" if value is None else str(value)
+        return dt.strftime("%d/%m/%Y")
+
     st.header("\U0001F501 Movement Log")
     if st.session_state.get("movement_deleted_success"):
         msg = st.session_state.get("movement_deleted_msg", "Movement deleted")
@@ -57,6 +64,21 @@ def render(conn):
         
         df_display['quantity'] = df_display.apply(format_quantity, axis=1)
     
+    # Format dates for display (keep ISO in DB for filtering)
+    if "movement_date" in df_display.columns:
+        raw_dates = df_display["movement_date"]
+        date_series = pd.to_datetime(raw_dates, errors="coerce")
+        formatted_dates = date_series.dt.strftime("%d/%m/%Y")
+        df_display["movement_date"] = formatted_dates.fillna(
+            raw_dates.fillna("").astype(str)
+        )
+
+    # Show N/A for Initial Stock price and nulls
+    if "price" in df_display.columns and "movement_type" in df_display.columns:
+        price_series = df_display["price"]
+        mask = (df_display["movement_type"] == "INITIAL STOCK") | (price_series.isna())
+        df_display.loc[mask, "price"] = "N/A"
+
     # Standardize column names for movement log even when there are no rows,
     # so the UI shows friendly headers instead of raw DB column names.
     rename_map = {
@@ -101,7 +123,7 @@ def render(conn):
             movement_name = df.iloc[idx].get('product_name', 'N/A')
             movement_type = df.iloc[idx].get('movement_type', 'N/A')
             movement_qty = df.iloc[idx].get('quantity', 'N/A')
-            movement_date = df.iloc[idx].get('movement_date', 'N/A')
+            movement_date = _format_date_value(df.iloc[idx].get("movement_date"))
             
             col1, col2 = st.columns([10, 1])
             with col1:

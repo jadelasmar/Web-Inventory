@@ -184,6 +184,12 @@ def render(conn):
                 "movement_date": "Date",
             }
         )
+        if "Date" in recent_movements.columns:
+            raw_dates = recent_movements["Date"]
+            date_series = pd.to_datetime(raw_dates, errors="coerce")
+            recent_movements["Date"] = date_series.dt.strftime("%d/%m/%Y").fillna(
+                raw_dates.fillna("").astype(str)
+            )
         st.dataframe(recent_movements, use_container_width=True, hide_index=True)
     else:
         st.info("No recent activity")
