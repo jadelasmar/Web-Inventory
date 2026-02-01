@@ -1,0 +1,47 @@
+# Using Codex CLI on Another Computer (Temporary Guide)
+
+Goal: Use the Codex CLI on another PC and link it to this repo.
+
+Assumptions:
+- You have access to the repo (GitHub or other remote).
+- You can install tools on the other PC.
+- This PC uses the npm-installed Codex CLI (codex.ps1 in npm global bin).
+
+1) Install prerequisites on the other PC
+- Git for Windows
+- Node.js (LTS) + npm
+- Python 3.10+ (optional; needed only if you run the app locally)
+
+2) Install Codex CLI (same method as this PC)
+Open PowerShell as your normal user:
+
+npm install -g codex
+
+Verify:
+
+codex --version
+
+3) Clone the repo
+Open PowerShell:
+
+git clone <your-repo-url> C:\Github\Web-Inventory
+cd C:\Github\Web-Inventory
+
+4) Open Codex CLI in the repo
+Run Codex from the repo directory so it uses the project context:
+
+codex
+
+If prompted, sign in with the same account used here.
+
+5) Optional: Keep tools consistent
+- Pull latest changes if needed:
+  git pull
+- Install Python deps if you plan to run the app:
+  pip install -r requirements.txt
+
+Notes:
+- Codex CLI uses the current working directory as the project context.
+- If you use a different repo path, just open Codex from that folder.
+
+If npm isn't available, tell me what install method you prefer (winget, chocolatey, manual).

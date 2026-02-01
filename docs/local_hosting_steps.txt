@@ -1,0 +1,61 @@
+# Local Hosting (Windows 11) - BIM POS Inventory (Temporary Guide)
+
+This is a quick, practical setup for running the app locally on a Windows 11 PC
+and sharing it on the LAN.
+
+1) Keep the PC awake (locking is OK)
+- Settings -> System -> Power & battery -> Screen and sleep
+- Set "When plugged in" to Never
+
+2) Bind Streamlit to LAN
+Create or edit .streamlit/config.toml:
+
+[server]
+address = "0.0.0.0"
+port = 8501
+headless = true
+
+3) Allow firewall access
+Run in an elevated PowerShell:
+
+New-NetFirewallRule -DisplayName "Streamlit BIM POS" -Direction Inbound -Protocol TCP -LocalPort 8501 -Action Allow
+
+4) Run as a Windows service (recommended)
+- Download NSSM: https://nssm.cc/download
+- Extract to C:\tools\nssm\nssm.exe
+- Open elevated PowerShell:
+
+C:\tools\nssm\nssm.exe install BIMPOS_Streamlit
+
+In the NSSM GUI:
+- Path: <python.exe path>
+- Startup directory: C:\Github\Web-Inventory
+- Arguments: -m streamlit run app.py
+- Log on: "This account" with your Windows user
+
+Then:
+Start-Service BIMPOS_Streamlit
+
+5) Find LAN URL
+Run:
+
+ipconfig
+
+Use the IPv4 address with port 8501:
+http://<PC-IP>:8501
+
+Optional (friendly name without router access):
+- On each client PC, edit C:\Windows\System32\drivers\etc\hosts as admin
+- Add: <PC-IP>  bimpos.local
+- Then open: http://bimpos.local:8501
+
+6) Daily backup (recommended)
+Create script C:\Github\Web-Inventory\scripts\backup_db.ps1:
+
+$src = "C:\Github\Web-Inventory\data\bimpos_inventory.db"
+$dstDir = "C:\Github\Web-Inventory\backups"
+if (!(Test-Path $dstDir)) { New-Item -ItemType Directory -Path $dstDir | Out-Null }
+$stamp = Get-Date -Format "yyyyMMdd_HHmm"
+Copy-Item $src (Join-Path $dstDir "bimpos_inventory_$stamp.db")
+
+Then schedule it in Task Scheduler to run daily.
