@@ -16,7 +16,7 @@ from core.simple_auth import login_form, require_auth, get_current_user
 from core.mobile_styles import apply_mobile_styles
 from ui.sidebar import render_sidebar_menu
 
-# Basic logging for Streamlit Cloud logs
+# Basic logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
@@ -41,6 +41,9 @@ def get_db_connection():
     return init_db()
 
 conn = get_db_connection()
+# Since we cache the connection, ensure the per-session DB label is set.
+if "db_backend" not in st.session_state:
+    st.session_state["db_backend"] = "sqlite"
 
 # Check authentication
 if not require_auth():

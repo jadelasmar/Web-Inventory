@@ -1,0 +1,27 @@
+id,product_name,product_category,movement_type,quantity,price,supplier_customer,notes,movement_date
+1,ZK-MSR,Magnetic Stripe Card Reader,INITIAL STOCK,4,,,Initial Stock,2026-02-01
+2,5160,Fingerprint Reader,INITIAL STOCK,9,,,Initial Stock,2026-02-01
+3,Dual-Port USB 56K Modem,Usb Dial-Up Modem,INITIAL STOCK,2,,,Initial Stock,2026-02-01
+4,USR5639,Usb Dial-Up Modem,INITIAL STOCK,1,,,Initial Stock,2026-02-01
+5,LaserJet M111a,Laser Printer,INITIAL STOCK,0,,,Initial Stock,2026-02-01
+6,GS-405A,Cash Drawer,INITIAL STOCK,7,,,Initial Stock,2026-02-01
+7,GS-T2,All-In-One Touch Pos System,INITIAL STOCK,8,,,Initial Stock,2026-02-01
+8,W1106A,Toner/Ink,INITIAL STOCK,4,,,Initial Stock,2026-02-01
+9,3-Ply,Paper Roll,INITIAL STOCK,1,,,Initial Stock,2026-02-01
+10,Wood-Free,Paper Roll,INITIAL STOCK,5,,,Initial Stock,2026-02-01
+11,Thermal,Paper Roll,INITIAL STOCK,1,,,Initial Stock,2026-02-01
+12,2-Ply,Paper Roll,INITIAL STOCK,1,,,Initial Stock,2026-02-01
+13,MS822B,Barcode Scanner,INITIAL STOCK,3,,,Initial Stock,2026-02-01
+14,CP-Q5,Thermal Receipt Printer,INITIAL STOCK,5,,,Initial Stock,2026-02-01
+15,Customized Thermal,Paper Roll,INITIAL STOCK,18,,,Initial Stock,2026-02-01
+16,4500,Fingerprint Reader,INITIAL STOCK,1,,,Initial Stock,2026-02-01
+17,DSP-880VF-B,Customer Display,INITIAL STOCK,1,,,Initial Stock,2026-02-01
+18,GK888T,Barcode Printer,INITIAL STOCK,1,,,Initial Stock,2026-02-01
+19,GS-I1S,All-In-One Touch Pos System,INITIAL STOCK,4,,,Initial Stock,2026-02-01
+20,W1500A,Toner/Ink,INITIAL STOCK,4,,,Initial Stock,2026-02-01
+21,GS-I1S Single,All-In-One Touch Pos System,INITIAL STOCK,3,,,Initial Stock,2026-02-01
+22,TL-SG2210MP,Switch,INITIAL STOCK,8,,,Initial Stock,2026-02-01
+23,A400 480GB SSD,Solid State Drive,INITIAL STOCK,1,,,Initial Stock,2026-02-01
+24,XP-T80Q,Thermal Receipt Printer,INITIAL STOCK,4,,,Initial Stock,2026-02-01
+25,TL-SG1008D,Switch,INITIAL STOCK,4,,,Initial Stock,2026-02-01
+26,TL-SG1016D,Switch,INITIAL STOCK,2,,,Initial Stock,2026-02-01

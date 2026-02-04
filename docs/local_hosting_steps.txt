@@ -1,6 +1,6 @@
 # Local Hosting (Windows 11) - BIM POS Inventory (Temporary Guide)
 #
-# Goal: Run fully local with SQLite (no Supabase/Cloud) and access it from
+# Goal: Run fully local with SQLite (no external cloud database) and access it from
 # phones on the same Wi-Fi. VS Code is NOT required once the service is set up.
 # The PC must be ON (locked is OK). If the PC is OFF or asleep, the app will
 # not be reachable.
@@ -18,14 +18,8 @@ cd C:\Github\Web-Inventory
 pip install -r requirements.txt
 
 3) Ensure local DB mode (SQLite)
-- In .streamlit/secrets.toml:
-  - Remove the [postgres] block, OR
-  - Set:
-    [postgres]
-    required = false
-
-If [postgres] is present and required=true, the app will stop on any
-Postgres connection error. For local-only, keep it absent or required=false.
+- No extra setup required. The app always uses the local SQLite file in
+  C:\Github\Web-Inventory\data\bimpos_inventory.db
 
 4) Keep the PC awake (locking is OK)
 - Settings -> System -> Power & battery -> Screen and sleep

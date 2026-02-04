@@ -88,13 +88,11 @@ def get_db_user(conn, username: str):
     cur = conn.cursor()
     username = (username or "").strip()
     try:
-        # Check if we're using PostgreSQL or SQLite
-        from core.services import is_postgres
-        if is_postgres(conn):
-            cur.execute("SELECT username, password_hash, name, role, status FROM users WHERE LOWER(username) = LOWER(%s)", (username,))
-        else:
-            cur.execute("SELECT username, password_hash, name, role, status FROM users WHERE LOWER(username) = LOWER(?)", (username,))
-        
+        cur.execute(
+            "SELECT username, password_hash, name, role, status "
+            "FROM users WHERE LOWER(username) = LOWER(?)",
+            (username,),
+        )
         row = cur.fetchone()
         if row:
             return {
@@ -168,17 +166,11 @@ def signup_user(conn, username: str, password: str, name: str) -> tuple:
     
     cur = conn.cursor()
     try:
-        from core.services import is_postgres
-        if is_postgres(conn):
-            cur.execute(
-                "INSERT INTO users (username, password_hash, name, role, status, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                (username.lower(), password_hash, name, 'viewer', 'pending', created_at)
-            )
-        else:
-            cur.execute(
-                "INSERT INTO users (username, password_hash, name, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (username.lower(), password_hash, name, 'viewer', 'pending', created_at)
-            )
+        cur.execute(
+            "INSERT INTO users (username, password_hash, name, role, status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (username.lower(), password_hash, name, "viewer", "pending", created_at),
+        )
         conn.commit()
         return True, "Account created! Waiting for admin approval."
     except Exception as e:

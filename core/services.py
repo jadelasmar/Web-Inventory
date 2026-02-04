@@ -5,76 +5,26 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import datetime
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional
 
 import pandas as pd
 import streamlit as st
 
-try:
-    import psycopg2
-    import psycopg2.extensions
-except ImportError:
-    psycopg2 = None
-try:
-    import sqlalchemy
-    from sqlalchemy import create_engine
-    from sqlalchemy.engine import URL
-except ImportError:
-    sqlalchemy = None
-    create_engine = None
-    URL = None
-
 logger = logging.getLogger(__name__)
 
 # Type alias for database connections
-DBConnection = Union[sqlite3.Connection, 'psycopg2.extensions.connection']
+DBConnection = sqlite3.Connection
 
 
-def is_postgres(conn: DBConnection) -> bool:
-    """Check if connection is PostgreSQL."""
-    return psycopg2 is not None and isinstance(conn, psycopg2.extensions.connection)
+def _placeholder(_: DBConnection) -> str:
+    return "?"
 
 
-def _placeholder(conn: DBConnection) -> str:
-    return "%s" if is_postgres(conn) else "?"
-
-
-def _placeholders(conn: DBConnection, count: int) -> str:
-    return ", ".join([_placeholder(conn)] * count)
-
-
-def _get_sqlalchemy_engine():
-    if sqlalchemy is None or create_engine is None or URL is None:
-        return None
-    if not hasattr(st, "secrets") or "postgres" not in st.secrets:
-        return None
-    cache_key = "_sqlalchemy_engine"
-    engine = st.session_state.get(cache_key)
-    if engine is not None:
-        return engine
-    pg = st.secrets["postgres"]
-    try:
-        url = URL.create(
-            "postgresql+psycopg2",
-            username=pg.get("user"),
-            password=pg.get("password"),
-            host=pg.get("host"),
-            port=int(pg.get("port", 5432)),
-            database=pg.get("database"),
-            query={"sslmode": "require"},
-        )
-    except Exception:
-        return None
-    engine = create_engine(url, pool_pre_ping=True)
-    st.session_state[cache_key] = engine
-    return engine
+def _placeholders(_: DBConnection, count: int) -> str:
+    return ", ".join(["?"] * count)
 
 
 def _read_sql(conn: DBConnection, query: str, params: Optional[Iterable] = None) -> pd.DataFrame:
-    if is_postgres(conn):
-        engine = _get_sqlalchemy_engine()
-        if engine is not None:
-            return pd.read_sql(query, engine, params=params or None)
     return pd.read_sql(query, conn, params=params or None)
 
 
@@ -201,12 +151,8 @@ def upsert_initial_stock(
 
 def init_db(conn: DBConnection) -> None:
     """Create tables for a new database (safe to run on existing DB)."""
-    is_pg = is_postgres(conn)
-    
-    # Use SERIAL for PostgreSQL, INTEGER PRIMARY KEY AUTOINCREMENT for SQLite
-    id_type = "SERIAL PRIMARY KEY" if is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"
-    # Use NUMERIC for PostgreSQL, REAL for SQLite
-    real_type = "NUMERIC(10,2)" if is_pg else "REAL"
+    id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+    real_type = "REAL"
     
     cur = conn.cursor()
     
@@ -277,126 +223,54 @@ def init_db(conn: DBConnection) -> None:
         """
     )
     
-    # Add foreign key for PostgreSQL (SQLite doesn't enforce it by default)
-    if is_pg:
-        try:
-            cur.execute("""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.table_constraints 
-                        WHERE constraint_name = 'fk_movements_product_name'
-                    ) THEN
-                        ALTER TABLE movements 
-                        ADD CONSTRAINT fk_movements_product_name 
-                        FOREIGN KEY(product_name) REFERENCES products(name);
-                    END IF;
-                END $$;
-            """)
-        except Exception:
-            pass
-    
     # Schema migrations: ensure `isactive` exists
     try:
-        if is_pg:
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name='products' AND column_name='isactive'
-            """)
-            if not cur.fetchone():
-                cur.execute(
-                    "ALTER TABLE products ADD COLUMN isactive INTEGER DEFAULT 1"
-                )
-            # Normalize nulls for older rows
-            cur.execute("UPDATE products SET isactive=1 WHERE isactive IS NULL")
-        else:
-            cur.execute("PRAGMA table_info(products)")
-            cols = [r[1] for r in cur.fetchall()]
-            if "isactive" not in cols:
-                cur.execute(
-                    "ALTER TABLE products ADD COLUMN isactive INTEGER DEFAULT 1"
-                )
-            # Normalize nulls for older rows
-            cur.execute("UPDATE products SET isactive=1 WHERE isactive IS NULL")
+        cur.execute("PRAGMA table_info(products)")
+        cols = [r[1] for r in cur.fetchall()]
+        if "isactive" not in cols:
+            cur.execute(
+                "ALTER TABLE products ADD COLUMN isactive INTEGER DEFAULT 1"
+            )
+        # Normalize nulls for older rows
+        cur.execute("UPDATE products SET isactive=1 WHERE isactive IS NULL")
     except Exception:
         pass
 
     # Schema migrations: ensure `brand` exists
     try:
-        if is_pg:
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name='products' AND column_name='brand'
-            """)
-            if not cur.fetchone():
-                cur.execute(
-                    "ALTER TABLE products ADD COLUMN brand TEXT"
-                )
-        else:
-            cur.execute("PRAGMA table_info(products)")
-            cols = [r[1] for r in cur.fetchall()]
-            if "brand" not in cols:
-                cur.execute(
-                    "ALTER TABLE products ADD COLUMN brand TEXT"
-                )
+        cur.execute("PRAGMA table_info(products)")
+        cols = [r[1] for r in cur.fetchall()]
+        if "brand" not in cols:
+            cur.execute(
+                "ALTER TABLE products ADD COLUMN brand TEXT"
+            )
     except Exception:
         pass
 
     # Schema migrations: ensure parties columns exist
     try:
-        if is_pg:
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name='parties' AND column_name='party_type'
-            """)
-            if not cur.fetchone():
-                cur.execute(
-                    "ALTER TABLE parties ADD COLUMN party_type TEXT DEFAULT 'Other'"
-                )
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name='parties' AND column_name='isactive'
-            """)
-            if not cur.fetchone():
-                cur.execute(
-                    "ALTER TABLE parties ADD COLUMN isactive INTEGER DEFAULT 1"
-                )
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name='parties' AND column_name='created_at'
-            """)
-            if not cur.fetchone():
-                cur.execute(
-                    "ALTER TABLE parties ADD COLUMN created_at TEXT"
-                )
-        else:
-            cur.execute("PRAGMA table_info(parties)")
-            cols = [r[1] for r in cur.fetchall()]
-            if "party_type" not in cols:
-                cur.execute(
-                    "ALTER TABLE parties ADD COLUMN party_type TEXT DEFAULT 'Other'"
-                )
-            if "isactive" not in cols:
-                cur.execute(
-                    "ALTER TABLE parties ADD COLUMN isactive INTEGER DEFAULT 1"
-                )
-            if "created_at" not in cols:
-                cur.execute(
-                    "ALTER TABLE parties ADD COLUMN created_at TEXT"
-                )
+        cur.execute("PRAGMA table_info(parties)")
+        cols = [r[1] for r in cur.fetchall()]
+        if "party_type" not in cols:
+            cur.execute(
+                "ALTER TABLE parties ADD COLUMN party_type TEXT DEFAULT 'Other'"
+            )
+        if "isactive" not in cols:
+            cur.execute(
+                "ALTER TABLE parties ADD COLUMN isactive INTEGER DEFAULT 1"
+            )
+        if "created_at" not in cols:
+            cur.execute(
+                "ALTER TABLE parties ADD COLUMN created_at TEXT"
+            )
     except Exception:
         pass
 
     # Normalize party types to title case and drop legacy "both"
     try:
-        if is_pg:
-            cur.execute("UPDATE parties SET party_type='Supplier' WHERE LOWER(party_type)='supplier'")
-            cur.execute("UPDATE parties SET party_type='Customer' WHERE LOWER(party_type)='customer'")
-            cur.execute("UPDATE parties SET party_type='Other' WHERE LOWER(party_type) IN ('other','both') OR party_type IS NULL")
-        else:
-            cur.execute("UPDATE parties SET party_type='Supplier' WHERE LOWER(party_type)='supplier'")
-            cur.execute("UPDATE parties SET party_type='Customer' WHERE LOWER(party_type)='customer'")
-            cur.execute("UPDATE parties SET party_type='Other' WHERE LOWER(party_type) IN ('other','both') OR party_type IS NULL")
+        cur.execute("UPDATE parties SET party_type='Supplier' WHERE LOWER(party_type)='supplier'")
+        cur.execute("UPDATE parties SET party_type='Customer' WHERE LOWER(party_type)='customer'")
+        cur.execute("UPDATE parties SET party_type='Other' WHERE LOWER(party_type) IN ('other','both') OR party_type IS NULL")
     except Exception:
         pass
     
@@ -415,8 +289,7 @@ def add_product(conn: DBConnection, data: tuple) -> None:
         (name.lower(),)
     )
     if cur.fetchone():
-        error_class = psycopg2.IntegrityError if is_postgres(conn) else sqlite3.IntegrityError
-        raise error_class("Duplicate product name (case-insensitive)")
+        raise sqlite3.IntegrityError("Duplicate product name (case-insensitive)")
     
     placeholders = _placeholders(conn, len(data))
     cur.execute(
@@ -496,8 +369,7 @@ def update_product(conn: DBConnection, data: tuple) -> None:
                 (new_name.lower(),),
             )
             if cur.fetchone():
-                error_class = psycopg2.IntegrityError if is_postgres(conn) else sqlite3.IntegrityError
-                raise error_class("Duplicate product name (case-insensitive)")
+                raise sqlite3.IntegrityError("Duplicate product name (case-insensitive)")
 
         cur.execute(
             f"""
@@ -677,7 +549,7 @@ def get_products(
     `isactive` column: if the column is missing it falls back to returning
     all rows.
     
-    Cached for 30 seconds to improve performance on Streamlit Cloud.
+    Cached for 30 seconds to improve performance.
     """
     @st.cache_data(ttl=30)
     def _fetch_products(cache_key: str, include_inactive: bool = False):
@@ -689,15 +561,8 @@ def get_products(
             # Prefer to filter by `isactive` when present; detect column existence
             cur = conn.cursor()
             try:
-                if is_postgres(conn):
-                    cur.execute("""
-                        SELECT column_name FROM information_schema.columns 
-                        WHERE table_name='products' AND column_name='isactive'
-                    """)
-                    cols = [r[0] for r in cur.fetchall()]
-                else:
-                    cur.execute("PRAGMA table_info(products)")
-                    cols = [r[1] for r in cur.fetchall()]
+                cur.execute("PRAGMA table_info(products)")
+                cols = [r[1] for r in cur.fetchall()]
             except Exception:
                 cols = []
 
@@ -730,15 +595,10 @@ def get_movements(
     """
     @st.cache_data(ttl=10)
     def _fetch_movements(cache_key: str, days: Optional[int] = None, types_tuple: Optional[tuple] = None):
-        table_name = "public.movements" if is_postgres(conn) else "movements"
-        query = f"SELECT * FROM {table_name} WHERE 1=1"
+        query = "SELECT * FROM movements WHERE 1=1"
         params = []
         if days:
-            if is_postgres(conn):
-                # movement_date is stored as TEXT; cast to date for reliable comparison
-                query += f" AND movement_date::date >= CURRENT_DATE - INTERVAL '{int(days)} days'"
-            else:
-                query += f" AND movement_date >= date('now','-{int(days)} days')"
+            query += f" AND movement_date >= date('now','-{int(days)} days')"
         if types_tuple:
             placeholder = _placeholder(conn)
             placeholders = ",".join([placeholder] * len(types_tuple))
@@ -915,8 +775,7 @@ def deactivate_party(conn: DBConnection, name: str) -> None:
 def _ensure_parties_table(conn: DBConnection) -> None:
     """Create parties table if missing (safe no-op for existing table)."""
     cur = conn.cursor()
-    is_pg = is_postgres(conn)
-    id_type = "SERIAL PRIMARY KEY" if is_pg else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
     try:
         cur.execute(
             f"""
@@ -1021,10 +880,10 @@ def approve_user(conn: DBConnection, user_id: int, approved_by: str) -> bool:
     """Approve a pending user."""
     cur = conn.cursor()
     try:
-        if is_postgres(conn):
-            cur.execute("UPDATE users SET status = %s, approved_by = %s WHERE id = %s", ('approved', approved_by, user_id))
-        else:
-            cur.execute("UPDATE users SET status = ?, approved_by = ? WHERE id = ?", ('approved', approved_by, user_id))
+        cur.execute(
+            "UPDATE users SET status = ?, approved_by = ? WHERE id = ?",
+            ("approved", approved_by, user_id),
+        )
         conn.commit()
         return True
     except Exception as e:
@@ -1037,10 +896,10 @@ def reject_user(conn: DBConnection, user_id: int) -> bool:
     """Reject a pending user (delete them)."""
     cur = conn.cursor()
     try:
-        if is_postgres(conn):
-            cur.execute("DELETE FROM users WHERE id = %s AND status = %s", (user_id, 'pending'))
-        else:
-            cur.execute("DELETE FROM users WHERE id = ? AND status = ?", (user_id, 'pending'))
+        cur.execute(
+            "DELETE FROM users WHERE id = ? AND status = ?",
+            (user_id, "pending"),
+        )
         conn.commit()
         return True
     except Exception as e:
@@ -1053,10 +912,7 @@ def delete_user(conn: DBConnection, user_id: int) -> bool:
     """Delete a user (owner only)."""
     cur = conn.cursor()
     try:
-        if is_postgres(conn):
-            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
-        else:
-            cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
         return True
     except Exception as e:
@@ -1069,10 +925,7 @@ def update_user_role(conn: DBConnection, user_id: int, new_role: str) -> bool:
     """Update user role (owner only)."""
     cur = conn.cursor()
     try:
-        if is_postgres(conn):
-            cur.execute("UPDATE users SET role = %s WHERE id = %s", (new_role, user_id))
-        else:
-            cur.execute("UPDATE users SET role = ? WHERE id = ?", (new_role, user_id))
+        cur.execute("UPDATE users SET role = ? WHERE id = ?", (new_role, user_id))
         conn.commit()
         return True
     except Exception as e:

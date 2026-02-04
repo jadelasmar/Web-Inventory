@@ -6,7 +6,7 @@
 - **Routing:** Sidebar labels map to `page_modules/*.py` `render(conn)` functions; admin-only pages are gated by `st.session_state.admin_mode`.
 - **Menu labels:** Centralized in `core/constants.py` (MENU_* constants) and reused by `app.py` and `ui/sidebar.py`.
 - **Data access:** All database logic lives in `core/services.py`; pages should call services instead of writing SQL.
-- **Database selection:** `core/db_init.py` uses PostgreSQL when `.streamlit/secrets.toml` has `[postgres]`; otherwise SQLite at `data/bimpos_inventory.db` (ensures `data/` exists).
+- **Database selection:** Local SQLite only at `data/bimpos_inventory.db` (ensures `data/` exists).
 - **Schema:** `services.init_db` creates/migrates:
   - `products` (name, category, brand, description, image_url, current_stock, cost_price, sale_price, supplier, isactive)
   - `movements` (product_name, movement_type, quantity, price, supplier_customer, notes, movement_date)
@@ -58,7 +58,7 @@
 
 ## Configuration & Secrets
 - Local secrets live in `.streamlit/secrets.toml` and should not be committed.
-- PostgreSQL is used in production; SQLite is the default for local development.
+- SQLite is used for local development and hosting.
 
 ## Future Ideas (Backlog)
 - Bulk physical inventory adjust (upload Name/SKU + Stock and log adjustments).

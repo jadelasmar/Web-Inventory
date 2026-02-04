@@ -2,7 +2,6 @@
 import streamlit as st
 import sqlite3
 from datetime import datetime
-import psycopg2
 from streamlit_free_text_select import st_free_text_select
 from core.constants import POS_CATEGORIES
 from core.services import (
@@ -304,7 +303,7 @@ def render(conn):
                             selected,
                         ),
                     )
-                except (sqlite3.IntegrityError, psycopg2.IntegrityError):
+                except sqlite3.IntegrityError:
                     st.toast(
                         f"\u274C Product '{edit_name or selected}' already exists.",
                         icon="\u26A0\ufe0f",
@@ -500,7 +499,7 @@ def render(conn):
                             datetime.now().date(),
                         ),
                     )
-            except (sqlite3.IntegrityError, psycopg2.IntegrityError):
+            except sqlite3.IntegrityError:
                 st.toast(f"\u274C Product '{name}' already exists.", icon="\u26A0\ufe0f")
             except Exception as e:
                 st.toast(f"\u274C Could not add product: {e}", icon="\u26A0\ufe0f")
