@@ -24,7 +24,13 @@ def render(conn):
     movement_filter_types = MOVEMENT_TYPES + ["INITIAL STOCK"]
     types = st.multiselect("Type", movement_filter_types, default=movement_filter_types)
     days_val = None if days == "All" else days
-    if not types:
+    # If all known types are selected, skip type filtering to avoid hiding
+    # movements with legacy/unknown movement_type values.
+    if types and set(types) == set(movement_filter_types):
+        types = None
+    if types is None:
+        df = get_movements(conn, days_val, None)
+    elif not types:
         df = get_movements(conn, days_val, None).iloc[0:0]
     else:
         df = get_movements(conn, days_val, types)

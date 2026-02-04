@@ -42,8 +42,8 @@ def init_db():
                 logger.exception('PostgreSQL connection failed')
                 st.error(f"\u26A0\ufe0f PostgreSQL connection failed: {str(e)}")
                 st.warning("\U0001F4DD Check: 1) Supabase project is ACTIVE (not paused), 2) Secrets are correct, 3) Database allows connections")
-                st.info("Using SQLite as fallback...")
-                conn = _connect_sqlite()
+                # Do not fall back to SQLite when PostgreSQL secrets are provided.
+                st.stop()
         else:
             # Fallback to SQLite for local development
             conn = _connect_sqlite()

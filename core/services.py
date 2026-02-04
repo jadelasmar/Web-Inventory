@@ -730,7 +730,8 @@ def get_movements(
     """
     @st.cache_data(ttl=10)
     def _fetch_movements(cache_key: str, days: Optional[int] = None, types_tuple: Optional[tuple] = None):
-        query = "SELECT * FROM movements WHERE 1=1"
+        table_name = "public.movements" if is_postgres(conn) else "movements"
+        query = f"SELECT * FROM {table_name} WHERE 1=1"
         params = []
         if days:
             if is_postgres(conn):
