@@ -13,6 +13,17 @@ from core.services import init_db as init_schema
 logger = logging.getLogger(__name__)
 
 
+def _require_postgres() -> bool:
+    """Return True if Postgres should be required when secrets are present."""
+    try:
+        if hasattr(st, "secrets") and "postgres" in st.secrets:
+            pg = st.secrets["postgres"]
+            return bool(pg.get("required", True))
+    except Exception:
+        pass
+    return False
+
+
 def init_db():
     """Initialize database connection. 
     Uses PostgreSQL in production (Streamlit Cloud) or SQLite locally.
@@ -38,19 +49,25 @@ def init_db():
                     options='-c statement_timeout=30000'  # 30 second query timeout
                 )
                 conn.autocommit = False
+                st.session_state["db_backend"] = "postgres"
             except Exception as e:
                 logger.exception('PostgreSQL connection failed')
                 st.error(f"\u26A0\ufe0f PostgreSQL connection failed: {str(e)}")
                 st.warning("\U0001F4DD Check: 1) Supabase project is ACTIVE (not paused), 2) Secrets are correct, 3) Database allows connections")
-                # Do not fall back to SQLite when PostgreSQL secrets are provided.
-                st.stop()
+                # Do not fall back to SQLite when PostgreSQL is required.
+                if _require_postgres():
+                    st.stop()
+                conn = _connect_sqlite()
+                st.session_state["db_backend"] = "sqlite"
         else:
             # Fallback to SQLite for local development
             conn = _connect_sqlite()
+            st.session_state["db_backend"] = "sqlite"
     except Exception:
         logger.exception('Database initialization fallback to SQLite')
         # If secrets file doesn't exist or any other error, use SQLite
         conn = _connect_sqlite()
+        st.session_state["db_backend"] = "sqlite"
     
     # Delegate schema creation to services.init_db
     init_schema(conn)

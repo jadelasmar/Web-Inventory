@@ -72,6 +72,8 @@ def render_sidebar_menu():
     user = get_current_user()
     st.sidebar.markdown(f"\U0001FAA7 **{user['name']}**")
     st.sidebar.caption(f"Role: {user['role'].title()}")
+    db_backend = st.session_state.get("db_backend", "unknown")
+    st.sidebar.caption(f"DB: {db_backend}")
     
     # Logout button
     if st.sidebar.button("\U0001F6AA Logout", width="stretch"):

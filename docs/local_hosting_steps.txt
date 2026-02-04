@@ -1,13 +1,37 @@
 # Local Hosting (Windows 11) - BIM POS Inventory (Temporary Guide)
+#
+# Goal: Run fully local with SQLite (no Supabase/Cloud) and access it from
+# phones on the same Wi-Fi. VS Code is NOT required once the service is set up.
+# The PC must be ON (locked is OK). If the PC is OFF or asleep, the app will
+# not be reachable.
 
-This is a quick, practical setup for running the app locally on a Windows 11 PC
-and sharing it on the LAN.
+Prereqs (one-time on the host PC):
+- Git for Windows
+- Python 3.10+
+- Optional: NSSM (for running as a service)
 
-1) Keep the PC awake (locking is OK)
+1) Get the repo
+git clone <your-repo-url> C:\Github\Web-Inventory
+cd C:\Github\Web-Inventory
+
+2) Install Python deps
+pip install -r requirements.txt
+
+3) Ensure local DB mode (SQLite)
+- In .streamlit/secrets.toml:
+  - Remove the [postgres] block, OR
+  - Set:
+    [postgres]
+    required = false
+
+If [postgres] is present and required=true, the app will stop on any
+Postgres connection error. For local-only, keep it absent or required=false.
+
+4) Keep the PC awake (locking is OK)
 - Settings -> System -> Power & battery -> Screen and sleep
 - Set "When plugged in" to Never
 
-2) Bind Streamlit to LAN
+5) Bind Streamlit to LAN
 Create or edit .streamlit/config.toml:
 
 [server]
@@ -15,28 +39,33 @@ address = "0.0.0.0"
 port = 8501
 headless = true
 
-3) Allow firewall access
+6) Allow firewall access
 Run in an elevated PowerShell:
 
 New-NetFirewallRule -DisplayName "Streamlit BIM POS" -Direction Inbound -Protocol TCP -LocalPort 8501 -Action Allow
 
-4) Run as a Windows service (recommended)
+7) Run as a Windows service (recommended, no VS Code needed)
 - Download NSSM: https://nssm.cc/download
 - Extract to C:\tools\nssm\nssm.exe
-- Open elevated PowerShell:
+- Open elevated PowerShell and run:
 
-C:\tools\nssm\nssm.exe install BIMPOS_Streamlit
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_local_hosting.ps1
 
-In the NSSM GUI:
-- Path: <python.exe path>
-- Startup directory: C:\Github\Web-Inventory
-- Arguments: -m streamlit run app.py
-- Log on: "This account" with your Windows user
+This script will:
+- Create the firewall rule for port 8501
+- Install/Update the Windows service
+- Start the service
+- Write logs to C:\Github\Web-Inventory\logs\
 
-Then:
-Start-Service BIMPOS_Streamlit
+This keeps the app running in the background even when VS Code is closed.
 
-5) Find LAN URL
+8) Stop or restart the service later (optional)
+- Stop:
+  powershell -ExecutionPolicy Bypass -File .\scripts\stop_local_hosting.ps1
+- Restart:
+  powershell -ExecutionPolicy Bypass -File .\scripts\restart_local_hosting.ps1
+
+9) Find LAN URL (use on your phone)
 Run:
 
 ipconfig
@@ -48,8 +77,11 @@ Optional (friendly name without router access):
 - On each client PC, edit C:\Windows\System32\drivers\etc\hosts as admin
 - Add: <PC-IP>  bimpos.local
 - Then open: http://bimpos.local:8501
+Notes:
+- If your PC IP never changes, the hosts entry will keep working.
+- If it ever changes, update the hosts entry on each device.
 
-6) Daily backup (recommended)
+10) Daily backup (recommended)
 Create script C:\Github\Web-Inventory\scripts\backup_db.ps1:
 
 $src = "C:\Github\Web-Inventory\data\bimpos_inventory.db"
@@ -59,3 +91,7 @@ $stamp = Get-Date -Format "yyyyMMdd_HHmm"
 Copy-Item $src (Join-Path $dstDir "bimpos_inventory_$stamp.db")
 
 Then schedule it in Task Scheduler to run daily.
+Suggested schedule:
+- Trigger: Daily at 02:00 AM
+- Action: Start a program -> powershell
+- Arguments: -ExecutionPolicy Bypass -File C:\Github\Web-Inventory\scripts\backup_db.ps1
